@@ -19,14 +19,14 @@ int next(struct getaddr *g)
 
 int uniform_get(void *private_data)
 {
-    struct getaddr_uniform *u = private_data;
+    struct uniform *u = private_data;
     double r1 = (double)rand() / RAND_MAX;
     return r1 * u->max;
 }
     
-struct getaddr_uniform *uniform(int max)
+struct uniform *uniform_new(int max)
 {
-    struct getaddr_uniform *u = calloc(sizeof(*u), 1);
+    struct uniform *u = calloc(sizeof(*u), 1);
     u->max = max;
     u->handle.private_data = u;
     u->handle.getaddr = uniform_get;
@@ -43,7 +43,7 @@ struct mixed_private {
 
 int mixed_get(void *private_data)
 {
-    struct getaddr_mix *m = private_data;
+    struct mixed *m = private_data;
     struct mixed_private *p = m->private_data;
     int i;
     double r = (double)rand() / RAND_MAX;
@@ -53,7 +53,7 @@ int mixed_get(void *private_data)
     return 0;
 }
 
-void mixed_del(struct getaddr_mix *self)
+void mixed_del(struct mixed *self)
 {
     int i;
     struct mixed_private *p = self->private_data;
@@ -64,16 +64,16 @@ void mixed_del(struct getaddr_mix *self)
     free(self);
 }
 
-struct getaddr_mix *mixed(void)
+struct mixed *mixed_new(void)
 {
-    struct getaddr_mix *m = calloc(sizeof(*m), 1);
+    struct mixed *m = calloc(sizeof(*m), 1);
     m->handle.private_data = m;
     m->handle.getaddr = mixed_get;
     m->private_data = calloc(sizeof(*m->private_data), 1);
     return m;
 }
 
-void mixed_add(struct getaddr_mix *self, struct getaddr *g, double p, int base)
+void mixed_do_add(struct mixed *self, struct getaddr *g, double p, int base)
 {
     struct mixed_private *priv = self->private_data;
     int i = priv->n;            /* ignore overflow */
@@ -95,7 +95,7 @@ struct trace_private {
 
 static int trace_get(void *private_data)
 {
-    struct getaddr_trace *t = private_data;
+    struct trace *t = private_data;
     struct trace_private *p = t->private_data;
 
     if (p->count > 0) {
@@ -111,16 +111,16 @@ static int trace_get(void *private_data)
     return p->addr;
 }
 
-void trace_del(struct getaddr_trace *t)
+void trace_del(struct trace *t)
 {
     fclose(t->private_data->fp);
     free(t->private_data);
     free(t);
 }
 
-struct getaddr_trace *trace(char *file)
+struct trace *trace_new(char *file)
 {
-    struct getaddr_trace *t = calloc(sizeof(*t), 1);
+    struct trace *t = calloc(sizeof(*t), 1);
     t->handle.private_data = t;
     t->handle.getaddr = trace_get;
     t->handle.del = (void*)trace_del;

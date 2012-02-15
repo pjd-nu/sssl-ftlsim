@@ -15,15 +15,15 @@
 #include "getaddr.h"
 %}
 
-struct getaddr_uniform {
+struct uniform {
     struct getaddr handle;
     int max;
 };
-%extend getaddr_uniform {
-    getaddr_uniform(int max) {
-        return uniform(max);
+%extend uniform {
+    uniform(int max) {
+        return uniform_new(max);
     }
-    ~getaddr_uniform() {
+    ~uniform() {
         free(self);
     }
 }
@@ -37,29 +37,29 @@ struct getaddr {
     }
 };
 
-struct getaddr_mix {
+struct mixed {
     struct getaddr handle;
 };
-%extend getaddr_mix {
-    getaddr_mix() {
-        return mixed();
+%extend mixed {
+    mixed() {
+        return mixed_new();
     }
-    ~getaddr_mixed() {
+    ~mixed() {
         mixed_del(self);
     }
     void add(struct getaddr *g, double p, int base) {
-        mixed_add(self, g, p, base);
+        mixed_do_add(self, g, p, base);
     }
 }
 
-struct getaddr_trace {
+struct trace {
     struct getaddr handle;
 };
-%extend getaddr_trace {
-    getaddr_trace(char *file) {
-        return trace(file);
+%extend trace {
+    trace(char *file) {
+        return trace_new(file);
     }
-    ~getaddr_trace() {
+    ~trace() {
         trace_del(self);
     }
 }
