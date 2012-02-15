@@ -1,5 +1,7 @@
 /*
  * file:        getaddr.h
+ * see getaddr.i for details
+ * Peter Desnoyers, Northeastern University, 2012
  */
 
 struct getaddr {

@@ -4,6 +4,8 @@
  *
  * For each of the getaddr classes:
  *  Each call to getaddr(self) returns a signed integer address or -1 if done.
+ *
+ * Peter Desnoyers, Northeastern University, 2012
  */
 
 %module getaddr

@@ -1,3 +1,13 @@
+/*
+ * file:        getaddr.c
+ * * description: Address generation for fast FTL simulation.
+ *
+ * External C code uses the 'struct getaddr' handle to interface
+ * directly - h->getaddr(h->private_data) returns the next address. 
+ *
+ * Peter Desanoyers, Northeastern University, 2012
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "getaddr.h"
