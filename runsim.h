@@ -15,6 +15,17 @@ struct lru {
     struct lru_private *private_data;
 };
 
-struct lru *lru_new(void);
+struct lru *lru_new(int T, int U, int Np);
 void lru_del(struct lru*);
+
+struct greedy {
+    struct runsim handle;
+    int T, U, Np;
+    int int_writes, ext_writes;
+    struct getaddr *generator;
+    struct greedy_private *private_data;
+};
+
+struct greedy *greedy_new(int T, int U, int Np);
+void greedy_del(struct greedy *g);
 

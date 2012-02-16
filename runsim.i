@@ -29,11 +29,26 @@ struct lru {
     struct getaddr *generator;
 };
 %extend lru {
-    lru() {
-        return lru_new();
+    lru(int T, int U, int Np) {
+        return lru_new(T, U, Np);
     }
     ~lru() {
         lru_del(self);
+    }
+}
+
+struct greedy {
+    struct runsim handle;
+    int T, U, Np;
+    int int_writes, ext_writes;
+    struct getaddr *generator;
+};
+%extend greedy {
+    greedy(int T, int U, int Np) {
+        return greedy_new(T, U, Np);
+    }
+    ~greedy() {
+        greedy_del(self);
     }
 }
 

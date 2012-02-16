@@ -51,7 +51,7 @@ static void lru_init(struct lru *lru)
  * a block at a time. (which really only makes a trivial difference)
  */
 
-void int_write(struct lru *lru, int a)
+static void int_write(struct lru *lru, int a)
 {
     struct lru_private *p = lru->private_data;
     int phys = p->l2p[a];
@@ -68,7 +68,7 @@ void int_write(struct lru *lru, int a)
     p->head = (p->head + 1) % p->T;
 }
 
-void host_write(struct lru *lru, int a)
+static void host_write(struct lru *lru, int a)
 {
     struct lru_private *p = lru->private_data;
 
@@ -91,13 +91,10 @@ void host_write(struct lru *lru, int a)
     int_write(lru, a);
 }
     
-void lru_run(void *private_data, int steps)
+static void lru_run(void *private_data, int steps)
 {
     int i;
     struct lru *lru = private_data;
-    if (lru->private_data == NULL)
-        lru_init(lru);
-
     struct getaddr *gen = lru->generator;
     
     for (i = 0; i < steps; i++) {
@@ -106,11 +103,13 @@ void lru_run(void *private_data, int steps)
     }
 }
 
-struct lru *lru_new(void)
+struct lru *lru_new(int T, int U, int Np)
 {
     struct lru *val = calloc(sizeof(*val), 1);
     val->handle.private_data = val;
     val->handle.runsim = lru_run;
+    val->T = T; val->U = U; val->Np = Np;
+    lru_init(val);
     return val;
 }
 
