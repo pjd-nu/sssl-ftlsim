@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "ftlsim.h"
 #include "getaddr.h"
 
 int next(struct getaddr *g)
