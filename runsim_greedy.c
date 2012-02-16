@@ -55,7 +55,7 @@ struct greedy_private {
     struct block *frontier;
     struct block *free_list;
     struct block *blocks;
-    int target_free, nfree;
+    int nfree;
     int Np;
     int total_blks;
 };
@@ -76,7 +76,7 @@ static struct block *blk_alloc(struct greedy_private *gp)
     for (i = 0; i < gp->Np; i++)
         b->lba[i] = -1;
     b->next = b->prev = b;
-    b->n_valid = 0;
+    b->n_valid = b->i = 0;
     return b;
 }
 
@@ -96,6 +96,8 @@ static void int_write(struct greedy_private *gp, int a)
 {
     gp->parent->int_writes++;
     
+    //printf(" wr %d\n", a);
+
     /* invalidate the old page, if it exists
      */
     struct block *b = gp->rmap[a].b;
@@ -103,6 +105,7 @@ static void int_write(struct greedy_private *gp, int a)
         int p = gp->rmap[a].page;
         b->lba[p] = -1;
         b->n_valid--;
+        //printf("  [%d %d]\n", b-gp->blocks, p);
         if (b != gp->frontier) {
             list_rm(b);
             list_add(b, &gp->bins[b->n_valid]);
@@ -119,11 +122,14 @@ static void int_write(struct greedy_private *gp, int a)
     gp->rmap[a].page = i;
     gp->frontier->n_valid++;
 
+    //printf("%d -> %d,%d\n", a, gp->frontier-gp->blocks, i);
+    
     /* if the block is full, it goes into the pool and we get another
      */
     if (gp->frontier->i == gp->Np) {
         list_add(gp->frontier, &gp->bins[gp->frontier->n_valid]);
         gp->frontier = blk_alloc(gp);
+        //printf("frontier: %d\n", gp->frontier - gp->blocks);
     }
 }
 
@@ -132,12 +138,14 @@ static void host_write(struct greedy_private *gp, int a)
     int i;
 
     gp->parent->ext_writes++;
+    //printf("write %d\n", a);
     int_write(gp, a);
 
-    while (gp->nfree < gp->target_free) {
+    while (gp->nfree < gp->parent->target_free) {
         struct block *b = get_greedy_block(gp);
+        //printf("free %d (%d)\n", b-gp->blocks, b->n_valid);
         for (i = 0; i < gp->Np; i++)
-            if (b->lba[i] >= 0)
+            if (b->lba[i] >= 0) 
                 int_write(gp, b->lba[i]);
         list_rm(b);
         blk_free(gp, b);
@@ -147,8 +155,6 @@ static void host_write(struct greedy_private *gp, int a)
 static void greedy_init(struct greedy *g)
 {
     int i;
-    int nlog = g->Np * g->U;
-    int nphys = g->Np * g->T;
     
     struct greedy_private *gp = calloc(sizeof(*gp), 1);
     gp->parent = g;
@@ -160,18 +166,18 @@ static void greedy_init(struct greedy *g)
         gp->bins[i].next = gp->bins[i].prev = &gp->bins[i];
     gp->min_valid = 0;       /* this is OK, since we search upwards */
 
-    gp->blocks = calloc(nphys * sizeof(*gp->blocks), 1); /* alloc all at once */
+    gp->blocks = calloc(g->T * sizeof(*gp->blocks), 1); /* alloc all at once */
 
-    for (i = 0; i < nphys; i++) {
+    for (i = 0; i < g->T; i++) {
         struct block *b = &gp->blocks[i];
         b->lba = calloc(g->Np * sizeof(int), 1); /* LBA map for each block */
         blk_free(gp, b);        /* all blocks start on free list */
     }
 
-    gp->rmap = calloc(nlog * sizeof(*gp->rmap), 1);
+    gp->rmap = calloc(g->U * gp->Np * sizeof(*gp->rmap), 1);
     gp->frontier = blk_alloc(gp);
 
-    for (i = 0; i < nlog; i++)  /* now write every address once */
+    for (i = 0; i < g->Np * g->U; i++)  /* now write every address once */
         host_write(gp, i);
 
     g->private_data = gp;       /* and we're done */

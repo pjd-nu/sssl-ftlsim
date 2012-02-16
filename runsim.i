@@ -41,6 +41,7 @@ struct greedy {
     struct runsim handle;
     int T, U, Np;
     int int_writes, ext_writes;
+    int target_free;
     struct getaddr *generator;
 };
 %extend greedy {
