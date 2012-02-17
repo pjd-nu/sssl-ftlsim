@@ -110,6 +110,18 @@ struct lru *lru_new(int T, int U, int Np)
     val->handle.runsim = lru_run;
     val->T = T; val->U = U; val->Np = Np;
     lru_init(val);
+
+    int i;
+    double sum = 0.0, incr = 1.0 * U / T;
+    for (i = 0; i < U*Np; i++) {
+        host_write(val, i);
+        sum += incr;
+        if (i - sum >= 1) {
+            host_write(val, i);
+            sum += incr;
+        }
+    }
+    
     return val;
 }
 
