@@ -92,7 +92,7 @@ static struct block *blk_alloc(struct greedylru_private *gp)
 static struct block *get_greedy_block(struct greedylru_private *gp)
 {
     int i;
-    for (i = gp->min_valid; i < gp->Np; i++)
+    for (i = gp->min_valid; i <= gp->Np; i++)
         if (!list_empty(&gp->bins[i])) {
             gp->min_valid = i;
             struct block *b = gp->bins[i].next; /* don't remove it */
@@ -117,6 +117,7 @@ static void queue_block(struct greedylru_private *gp, struct block *b)
         b = gp->lru.tail;
         gp->lru.tail = b->next;
         gp->lru.len--;
+        b->in_greedy = 1;
         list_add(b, &gp->bins[b->n_valid]);
         if (b->n_valid < gp->min_valid)
             gp->min_valid = b->n_valid;
@@ -150,7 +151,7 @@ static void int_write(struct greedylru_private *gp, int a)
 
     /* if the block is full, it goes on the LRU queue and we get another */
     if (gp->frontier->i == gp->Np) {
-        queue_block(gp, b);
+        queue_block(gp, gp->frontier);
         gp->frontier = blk_alloc(gp);
     }
 }
@@ -221,6 +222,8 @@ struct greedylru *greedylru_new(int T, int U, int Np)
     val->handle.private_data = val;
     val->handle.runsim = greedylru_run;
     val->T = T; val->U = U; val->Np = Np;
+    val->target_free = 1;
+    val->lru_max = U;
     greedylru_init(val);
     return val;
 }

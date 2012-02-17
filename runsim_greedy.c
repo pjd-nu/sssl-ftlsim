@@ -96,16 +96,12 @@ static void int_write(struct greedy_private *gp, int a)
 {
     gp->parent->int_writes++;
     
-    //printf(" wr %d\n", a);
-
-    /* invalidate the old page, if it exists
-     */
     struct block *b = gp->rmap[a].b;
-    if (b != NULL) {
+    if (b != NULL) {       /* invalidate the old page, if it exists */
         int p = gp->rmap[a].page;
         b->lba[p] = -1;
         b->n_valid--;
-        //printf("  [%d %d]\n", b-gp->blocks, p);
+
         if (b != gp->frontier) {
             list_rm(b);
             list_add(b, &gp->bins[b->n_valid]);
@@ -114,22 +110,16 @@ static void int_write(struct greedy_private *gp, int a)
         }
     }
 
-    /* write the data
-     */
-    int i = gp->frontier->i++;
+    int i = gp->frontier->i++;  /* write the data */
     gp->frontier->lba[i] = a;
     gp->rmap[a].b = gp->frontier;
     gp->rmap[a].page = i;
     gp->frontier->n_valid++;
 
-    //printf("%d -> %d,%d\n", a, gp->frontier-gp->blocks, i);
-    
-    /* if the block is full, it goes into the pool and we get another
-     */
+    /* if the block is full, it goes into the pool and we get another */
     if (gp->frontier->i == gp->Np) {
         list_add(gp->frontier, &gp->bins[gp->frontier->n_valid]);
         gp->frontier = blk_alloc(gp);
-        //printf("frontier: %d\n", gp->frontier - gp->blocks);
     }
 }
 
@@ -138,12 +128,10 @@ static void host_write(struct greedy_private *gp, int a)
     int i;
 
     gp->parent->ext_writes++;
-    //printf("write %d\n", a);
     int_write(gp, a);
 
     while (gp->nfree < gp->parent->target_free) {
         struct block *b = get_greedy_block(gp);
-        //printf("free %d (%d)\n", b-gp->blocks, b->n_valid);
         for (i = 0; i < gp->Np; i++)
             if (b->lba[i] >= 0) 
                 int_write(gp, b->lba[i]);
