@@ -30,3 +30,14 @@ struct greedy {
 struct greedy *greedy_new(int T, int U, int Np);
 void greedy_del(struct greedy *g);
 
+struct greedylru {
+    struct runsim handle;
+    int T, U, Np;
+    int int_writes, ext_writes;
+    int target_free, lru_max;
+    struct getaddr *generator;
+    struct greedylru_private *private_data;
+};
+
+struct greedylru *greedylru_new(int T, int U, int Np);
+void greedylru_del(struct greedylru *g);

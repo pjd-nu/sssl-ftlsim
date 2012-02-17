@@ -1,6 +1,6 @@
 /*
- * file:        runsim_greedy.c
- * description: FTL simulation engine for simple greedy cleaning
+ * file:        runsim_greedy_lru.c
+ * description: FTL simulation engine for Hu's Greedy/LRU algorithm
  *
  * Peter Desnoyers, Northeastern University, 2012
  */
@@ -17,6 +17,7 @@ struct block {
     int *lba;               /* LBA mapped to each page */
     int i;                      /* next LBA to write */
     int n_valid;                /* stats, plus indicates greedy bin */
+    int in_greedy;
 };
 
 /* the standard doubly-linked-list primitives
@@ -47,26 +48,33 @@ struct rmap {
     int           page;
 };
 
-struct greedy_private {
-    struct greedy *parent;
+struct greedylru_private {
+    struct greedylru *parent;
     struct rmap *rmap;
     struct block *bins;
     int min_valid;              /* start searching bins here */
     struct block *frontier;
     struct block *free_list;
     struct block *blocks;
+    struct {
+        struct block *head;
+        struct block *tail;
+        int len;
+    } lru;
     int nfree;
     int Np;
 };
 
-static void blk_free(struct greedy_private *gp, struct block *b)
+/* put a block back on the free list */
+static void blk_free(struct greedylru_private *gp, struct block *b)
 {
     b->next = gp->free_list;
     gp->free_list = b;
     gp->nfree++;
 }
 
-static struct block *blk_alloc(struct greedy_private *gp)
+/* get a block from the free list and initialize it */
+static struct block *blk_alloc(struct greedylru_private *gp)
 {
     int i;
     struct block *b = gp->free_list;
@@ -75,11 +83,13 @@ static struct block *blk_alloc(struct greedy_private *gp)
     for (i = 0; i < gp->Np; i++)
         b->lba[i] = -1;
     b->next = b->prev = b;
-    b->n_valid = b->i = 0;
+    b->n_valid = b->i = b->in_greedy = 0;
     return b;
 }
 
-static struct block *get_greedy_block(struct greedy_private *gp)
+/* greedy cleaning. note that this won't be called until the greedy
+ * tail is non-empty */
+static struct block *get_greedy_block(struct greedylru_private *gp)
 {
     int i;
     for (i = gp->min_valid; i < gp->Np; i++)
@@ -92,21 +102,38 @@ static struct block *get_greedy_block(struct greedy_private *gp)
     return NULL;
 }
 
-static void int_write(struct greedy_private *gp, int a)
+/* add a block to the LRU queue, move a block to the greedy tail if needed */
+static void queue_block(struct greedylru_private *gp, struct block *b)
+{
+    if (gp->lru.tail == NULL)
+        gp->lru.head = gp->lru.tail = b;
+    else {
+        gp->lru.head->next = b;
+        gp->lru.head = b;
+    }
+    gp->lru.len++;
+
+    while (gp->lru.len > gp->parent->lru_max) {
+        b = gp->lru.tail;
+        gp->lru.tail = b->next;
+        gp->lru.len--;
+        list_add(b, &gp->bins[b->n_valid]);
+        if (b->n_valid < gp->min_valid)
+            gp->min_valid = b->n_valid;
+    }
+}
+    
+/* any internal write to flash, whether cleaning-related or not */
+static void int_write(struct greedylru_private *gp, int a)
 {
     gp->parent->int_writes++;
     
-    //printf(" wr %d\n", a);
-
-    /* invalidate the old page, if it exists
-     */
     struct block *b = gp->rmap[a].b;
-    if (b != NULL) {
+    if (b != NULL) {       /* invalidate the old page, if it exists */
         int p = gp->rmap[a].page;
         b->lba[p] = -1;
         b->n_valid--;
-        //printf("  [%d %d]\n", b-gp->blocks, p);
-        if (b != gp->frontier) {
+        if (b->in_greedy) { /* move between bins in the greedy tail */
             list_rm(b);
             list_add(b, &gp->bins[b->n_valid]);
             if (b->n_valid < gp->min_valid)
@@ -114,36 +141,29 @@ static void int_write(struct greedy_private *gp, int a)
         }
     }
 
-    /* write the data
-     */
+    /* write the data */
     int i = gp->frontier->i++;
     gp->frontier->lba[i] = a;
     gp->rmap[a].b = gp->frontier;
     gp->rmap[a].page = i;
     gp->frontier->n_valid++;
 
-    //printf("%d -> %d,%d\n", a, gp->frontier-gp->blocks, i);
-    
-    /* if the block is full, it goes into the pool and we get another
-     */
+    /* if the block is full, it goes on the LRU queue and we get another */
     if (gp->frontier->i == gp->Np) {
-        list_add(gp->frontier, &gp->bins[gp->frontier->n_valid]);
+        queue_block(gp, b);
         gp->frontier = blk_alloc(gp);
-        //printf("frontier: %d\n", gp->frontier - gp->blocks);
     }
 }
 
-static void host_write(struct greedy_private *gp, int a)
+static void host_write(struct greedylru_private *gp, int a)
 {
     int i;
 
     gp->parent->ext_writes++;
-    //printf("write %d\n", a);
     int_write(gp, a);
 
     while (gp->nfree < gp->parent->target_free) {
         struct block *b = get_greedy_block(gp);
-        //printf("free %d (%d)\n", b-gp->blocks, b->n_valid);
         for (i = 0; i < gp->Np; i++)
             if (b->lba[i] >= 0) 
                 int_write(gp, b->lba[i]);
@@ -152,11 +172,11 @@ static void host_write(struct greedy_private *gp, int a)
     }
 }
 
-static void greedy_init(struct greedy *g)
+static void greedylru_init(struct greedylru *g)
 {
     int i;
     
-    struct greedy_private *gp = calloc(sizeof(*gp), 1);
+    struct greedylru_private *gp = calloc(sizeof(*gp), 1);
     gp->parent = g;
     gp->Np = g->Np;
 
@@ -183,10 +203,10 @@ static void greedy_init(struct greedy *g)
     g->private_data = gp;       /* and we're done */
 }
 
-static void greedy_run(void *private_data, int steps)
+static void greedylru_run(void *private_data, int steps)
 {
     int i;
-    struct greedy *greedy = private_data;
+    struct greedylru *greedy = private_data;
     struct getaddr *gen = greedy->generator;
     
     for (i = 0; i < steps; i++) {
@@ -195,20 +215,20 @@ static void greedy_run(void *private_data, int steps)
     }
 }
 
-struct greedy *greedy_new(int T, int U, int Np)
+struct greedylru *greedylru_new(int T, int U, int Np)
 {
-    struct greedy *val = calloc(sizeof(*val), 1);
+    struct greedylru *val = calloc(sizeof(*val), 1);
     val->handle.private_data = val;
-    val->handle.runsim = greedy_run;
+    val->handle.runsim = greedylru_run;
     val->T = T; val->U = U; val->Np = Np;
-    greedy_init(val);
+    greedylru_init(val);
     return val;
 }
 
-void greedy_del(struct greedy *g)
+void greedylru_del(struct greedylru *g)
 {
     int i;
-    struct greedy_private *p = g->private_data;
+    struct greedylru_private *p = g->private_data;
     free(p->bins);
     for (i = 0; i < g->T; i++)
         free(p->blocks[i].lba);

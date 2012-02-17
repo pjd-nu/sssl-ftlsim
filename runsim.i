@@ -53,5 +53,21 @@ struct greedy {
     }
 }
 
+struct greedylru {
+    struct runsim handle;
+    int T, U, Np;
+    int int_writes, ext_writes;
+    int target_free, lru_max;
+    struct getaddr *generator;
+};
+%extend greedylru {
+    greedylru(int T, int U, int Np) {
+        return greedylru_new(T, U, Np);
+    }
+    ~greedylru() {
+        greedylru_del(self);
+    }
+}
+
 void srand(int seed);
 int rand(void);
