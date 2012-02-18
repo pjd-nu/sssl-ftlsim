@@ -133,3 +133,41 @@ struct trace *trace_new(char *file)
     return t;
 }
 
+struct log_private {
+    struct getaddr *src;
+    FILE *fp;
+};
+
+int log_get(void *private_data)
+{
+    struct log *l = private_data;
+    int a = next(l->private_data->src);
+    fprintf(l->private_data->fp, "%d\n", a);
+    return a;
+}
+
+void log_close(struct log *l)
+{
+    struct log_private *p = l->private_data;
+    fclose(p->fp);
+    if (p->src->del)
+        p->src->del(p->src->private_data);
+    free(l->private_data);
+    free(l);
+}
+   
+struct log *log_new(struct getaddr *src, char *file)
+{
+    struct log_private *priv = calloc(sizeof(*priv), 1);
+    priv->src = src;
+    priv->fp = fopen(file, "w");
+
+    struct log *val = calloc(sizeof(*val), 1);
+    val->handle.private_data = val;
+    val->handle.getaddr = log_get;
+    val->handle.del = (void*)log_close;
+    val->private_data = priv;
+
+    return val;
+}
+

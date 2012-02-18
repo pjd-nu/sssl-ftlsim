@@ -31,7 +31,6 @@ struct uniform {
 
 struct getaddr {
 };
-
 %extend getaddr {
     int next(void) {
         return next(self);
@@ -64,3 +63,16 @@ struct trace {
         trace_del(self);
     }
 }
+
+struct log {
+    struct getaddr handle;
+};
+%extend log {
+    log(struct getaddr *src, char *file) {
+        return log_new(src, file);
+    }
+    ~log() {
+        log_close(self);
+    }
+}
+   
