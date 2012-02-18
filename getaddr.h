@@ -36,4 +36,12 @@ struct log {
 struct log *log_new(struct getaddr *src, char *file);
 void log_close(struct log *l);
 
+struct scramble {
+    struct getaddr handle;
+    struct scramble_private *private_data;
+};
+
+struct scramble *scramble_new(struct getaddr *src, int max);
+void scramble_del(struct scramble *self);
+
 int next(struct getaddr *);

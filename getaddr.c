@@ -171,3 +171,53 @@ struct log *log_new(struct getaddr *src, char *file)
     return val;
 }
 
+struct scramble_private {
+    int max;
+    int *permutation;
+    struct getaddr *src;
+};
+
+void scramble_del(struct scramble *self)
+{
+    struct scramble_private *p = self->private_data;
+    if (p->src->del)
+        p->src->del(p->src->private_data);
+    free(p);
+    free(self);
+}
+
+int scramble_get(void *private_data)
+{
+    struct scramble *s = private_data;
+    struct scramble_private *p = s->private_data;
+    int a = next(p->src);
+    return p->permutation[a];
+}
+
+struct scramble *scramble_new(struct getaddr *src, int max)
+{
+    int i;
+    struct scramble_private *priv = calloc(sizeof(*priv), 1);
+    priv->src = src;
+    priv->max = max;
+    priv->permutation = malloc(sizeof(int)*max);
+
+    for (i = 0; i < max; i++)   /* Knuth Shuffle */
+        priv->permutation[i] = i;
+    for (i = 0; i < max; i++) {
+        int tmp, x = 1.0 * rand() * (max-i) / RAND_MAX;
+        assert(x+i < max);
+        tmp = priv->permutation[x+i];
+        priv->permutation[x+i] = priv->permutation[i];
+        priv->permutation[i] = tmp;
+    }
+        
+    struct scramble *val = calloc(sizeof(*val), 1);
+    val->handle.private_data = val;
+    val->handle.getaddr = scramble_get;
+    val->handle.del = (void*)scramble_del;
+    val->private_data = priv;
+
+    return val;
+}
+    

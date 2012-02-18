@@ -76,3 +76,14 @@ struct log {
     }
 }
    
+struct scramble {
+    struct getaddr handle;
+};
+%extend scramble {
+    scramble(struct getaddr *src, int max) {
+        return scramble_new(src, max);
+    }
+    ~scramble() {
+        scramble_del(self);
+    }
+}
