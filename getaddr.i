@@ -32,6 +32,14 @@ struct uniform {
 struct getaddr {
 };
 %extend getaddr {
+    %insert("python") %{
+        def addrs(self):
+            while True:
+                a = self.next()
+                if a == -1:
+                    break;
+                yield(a)
+    %}
     int next(void) {
         return next(self);
     }
@@ -54,6 +62,7 @@ struct mixed {
 
 struct trace {
     struct getaddr handle;
+    int eof, single;
 };
 %extend trace {
     trace(char *file) {
@@ -78,6 +87,7 @@ struct log {
    
 struct scramble {
     struct getaddr handle;
+    int eof;
 };
 %extend scramble {
     scramble(struct getaddr *src, int max) {
