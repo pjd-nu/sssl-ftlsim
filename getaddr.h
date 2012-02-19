@@ -22,6 +22,7 @@ void mixed_del(struct mixed *self);
 
 struct trace {
     struct getaddr handle;
+    int eof, single;
     struct trace_private *private_data;
 };
 
@@ -38,6 +39,7 @@ void log_close(struct log *l);
 
 struct scramble {
     struct getaddr handle;
+    int eof;
     struct scramble_private *private_data;
 };
 

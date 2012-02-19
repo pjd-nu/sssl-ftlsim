@@ -106,8 +106,13 @@ static int trace_get(void *private_data)
     }
 
     char line[80], *tmp;
-    if (fgets(line, sizeof(line), p->fp) == NULL)
+    if (fgets(line, sizeof(line), p->fp) == NULL) {
+        t->eof = 1;
         return -1;
+    }
+    if (t->single)
+        return atoi(line);
+    
     p->addr = strtol(line, &tmp, 0);
     p->count = strtol(tmp, NULL, 0) - 1;
     return p->addr;
@@ -192,6 +197,10 @@ int scramble_get(void *private_data)
     struct scramble *s = private_data;
     struct scramble_private *p = s->private_data;
     int a = next(p->src);
+    if (a == -1) {
+        s->eof = 1;
+        return -1;
+    }
     return p->permutation[a];
 }
 
