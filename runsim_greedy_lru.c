@@ -212,6 +212,8 @@ static void greedylru_run(void *private_data, int steps)
     
     for (i = 0; i < steps; i++) {
         int a = gen->getaddr(gen->private_data);
+        if (a == -1)
+            break;
         host_write(greedy->private_data, a);
     }
 }

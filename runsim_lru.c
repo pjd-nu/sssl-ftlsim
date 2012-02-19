@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "ftlsim.h"
 #include "runsim.h"
 
@@ -72,6 +73,8 @@ static void host_write(struct lru *lru, int a)
 {
     struct lru_private *p = lru->private_data;
 
+    assert(a < p->U);
+    
     /* first make sure we have space, cleaning some integer number of
      * erase blocks if necessary
      */
@@ -99,6 +102,8 @@ static void lru_run(void *private_data, int steps)
     
     for (i = 0; i < steps; i++) {
         int a = gen->getaddr(gen->private_data);
+        if (a == -1)
+            break;
         host_write(lru, a);
     }
 }
