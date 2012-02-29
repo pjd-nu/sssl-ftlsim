@@ -204,25 +204,17 @@ static void greedylru_init(struct greedylru *g)
     g->private_data = gp;       /* and we're done */
 }
 
-static void greedylru_run(void *private_data, int steps)
+static void greedylru_step(void *private_data, int addr)
 {
-    int i;
     struct greedylru *greedy = private_data;
-    struct getaddr *gen = greedy->generator;
-    
-    for (i = 0; i < steps; i++) {
-        int a = gen->getaddr(gen->private_data);
-        if (a == -1)
-            break;
-        host_write(greedy->private_data, a);
-    }
+    host_write(greedy->private_data, addr);
 }
 
 struct greedylru *greedylru_new(int T, int U, int Np)
 {
     struct greedylru *val = calloc(sizeof(*val), 1);
     val->handle.private_data = val;
-    val->handle.runsim = greedylru_run;
+    val->handle.step = greedylru_step;
     val->T = T; val->U = U; val->Np = Np;
     val->target_free = 1;
     val->lru_max = U;

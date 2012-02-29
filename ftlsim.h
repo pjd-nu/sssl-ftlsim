@@ -1,9 +1,13 @@
 /* for statistics - add a visitor method? what else?
  */
 
+#include <Python.h>
+
 struct runsim {
-    void (*runsim)(void *private_data, int steps);
+    void (*step)(void *private_data, int addr);
+    struct getaddr *generator;
     void *private_data;
+    PyObject *stats;
 };
 
 struct getaddr {

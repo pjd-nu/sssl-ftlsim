@@ -11,7 +11,7 @@ getaddr_module = Extension('_getaddr',
                            )
 runsim_module = Extension('_runsim', 
                            sources=['runsim.i', 'runsim_lru.c', 'runsim_greedy.c',
-                                    'runsim_greedy_lru.c'],
+                                    'runsim_greedy_lru.c', 'runsim.c'],
                            )
 
 setup (name = 'ftlsim',

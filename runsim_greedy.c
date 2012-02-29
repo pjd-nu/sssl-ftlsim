@@ -171,25 +171,17 @@ static void greedy_init(struct greedy *g)
     g->private_data = gp;       /* and we're done */
 }
 
-static void greedy_run(void *private_data, int steps)
+static void greedy_step(void *private_data, int addr)
 {
-    int i;
     struct greedy *greedy = private_data;
-    struct getaddr *gen = greedy->generator;
-    
-    for (i = 0; i < steps; i++) {
-        int a = gen->getaddr(gen->private_data);
-        if (a == -1)
-            break;
-        host_write(greedy->private_data, a);
-    }
+    host_write(greedy->private_data, addr);
 }
 
 struct greedy *greedy_new(int T, int U, int Np)
 {
     struct greedy *val = calloc(sizeof(*val), 1);
     val->handle.private_data = val;
-    val->handle.runsim = greedy_run;
+    val->handle.step = greedy_step;
     val->T = T; val->U = U; val->Np = Np;
     greedy_init(val);
     return val;
