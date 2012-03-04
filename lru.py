@@ -15,33 +15,27 @@ lru = runsim.lru(T, U, Np)
 
 
 hist = dict()
-def exit_stats(nv, blk):
+def exit_stats(tmp, nv, blk):
     global hist
     if nv not in hist:
         hist[nv] = 0
     hist[nv] += 1
 
-stat_functions = {'exit': exit_stats}
-
-def stat_handler(_type, *args):
-    if _type == 'exit':
-        exit_stats(*args)
-
 def do_print_stats():
     global hist
-    print 'print_stats'
     for i in range(129):
         if i in hist:
             print i, hist[i]
             hist.pop(i)
         
-lru.handle.stats = stat_handler
 
 warmup = getaddr.uniform(U*Np)
 lru.handle.generator = warmup.handle
 lru.handle.run(T*Np*2)
 lru.int_writes = 0
 lru.ext_writes = 0
+
+lru.handle.stats_exit = exit_stats
 
 #rnge = [111, 1307, 697260, 1477320]
 #base = [0, 111, 1418, 698678, 2175998]

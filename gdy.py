@@ -13,8 +13,36 @@ print "T %d U %d" % (T, U)
 addr = getaddr.uniform(U*Np)
 
 gdy = runsim.greedy(T, U, Np)
-gdy.generator = addr.handle
+gdy.handle.generator = addr.handle
 gdy.target_free = 32
+
+hist = dict()
+def exit_stats(tmp, nv, blk):
+    global hist
+    if nv not in hist:
+        hist[nv] = 0
+    hist[nv] += 1
+
+lowpgs = 0
+
+def enter_stats(tmp, blk):
+    global lowpgs
+    for i in range(Np):
+        addr = gdy.handle.get_phys_page(blk, i)
+        if addr < 10 and addr >= 0:
+            print blk, i, addr
+            lowpgs += 1
+    
+def do_print_stats():
+    global hist
+    print 'print_stats', lowpgs
+    for i in range(129):
+        if i in hist:
+            print i, hist[i]
+            hist.pop(i)
+        
+gdy.handle.stats_exit = exit_stats
+gdy.handle.stats_enter = enter_stats
 
 n=0
 for i in range(50):
@@ -23,4 +51,6 @@ for i in range(50):
     n += gdy.int_writes
     gdy.int_writes = 0
     gdy.ext_writes = 0
+    do_print_stats()
+
 print n, "writes"

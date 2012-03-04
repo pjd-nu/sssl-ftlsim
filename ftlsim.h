@@ -7,7 +7,10 @@ struct runsim {
     void (*step)(void *private_data, int addr);
     struct getaddr *generator;
     void *private_data;
-    PyObject *stats;
+    PyObject *stats_exit;       /* blocks at cleaning time */
+    PyObject *stats_enter;      /* blocks entering pool */
+    PyObject *stats_write;      /* every write */
+    int (*get_physpage)(void *, int blk, int pg);
 };
 
 struct getaddr {

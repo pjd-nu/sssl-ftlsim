@@ -59,6 +59,17 @@ struct greedy_private {
     int Np;
 };
 
+static int get_phys_page(void *private_data, int blknum, int pgnum)
+{
+    struct greedy *greedy = private_data;
+    struct greedy_private *gp = greedy->private_data;
+
+    if (blknum >= gp->parent->T || blknum < 0 || pgnum >= gp->Np || pgnum < 0)
+        return -1;
+    struct block *b = gp->blocks + blknum;
+    return b->lba[pgnum];
+}
+
 static void blk_free(struct greedy_private *gp, struct block *b)
 {
     b->next = gp->free_list;
@@ -111,6 +122,9 @@ static void int_write(struct greedy_private *gp, int a)
     }
 
     int i = gp->frontier->i++;  /* write the data */
+    int blknum = gp->frontier - gp->blocks;
+    runsim_stats_write(&gp->parent->handle, a, blknum, i);
+
     gp->frontier->lba[i] = a;
     gp->rmap[a].b = gp->frontier;
     gp->rmap[a].page = i;
@@ -118,6 +132,7 @@ static void int_write(struct greedy_private *gp, int a)
 
     /* if the block is full, it goes into the pool and we get another */
     if (gp->frontier->i == gp->Np) {
+        runsim_stats_enter(&gp->parent->handle, gp->frontier - gp->blocks);
         list_add(gp->frontier, &gp->bins[gp->frontier->n_valid]);
         gp->frontier = blk_alloc(gp);
     }
@@ -132,6 +147,7 @@ static void host_write(struct greedy_private *gp, int a)
 
     while (gp->nfree < gp->parent->target_free) {
         struct block *b = get_greedy_block(gp);
+        runsim_stats_exit(&gp->parent->handle, b->n_valid, b - gp->blocks);
         for (i = 0; i < gp->Np; i++)
             if (b->lba[i] >= 0) 
                 int_write(gp, b->lba[i]);
@@ -182,6 +198,7 @@ struct greedy *greedy_new(int T, int U, int Np)
     struct greedy *val = calloc(sizeof(*val), 1);
     val->handle.private_data = val;
     val->handle.step = greedy_step;
+    val->handle.get_physpage = get_phys_page;
     val->T = T; val->U = U; val->Np = Np;
     greedy_init(val);
     return val;

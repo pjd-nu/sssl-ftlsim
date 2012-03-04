@@ -15,7 +15,9 @@
 
 struct runsim {
     struct getaddr *generator;
-    PyObject *stats;
+    PyObject *stats_exit;       /* blocks at cleaning time */
+    PyObject *stats_enter;      /* blocks entering pool */
+    PyObject *stats_write;      /* every write */
 };
 %extend runsim {
     void run(int steps) {
@@ -28,6 +30,12 @@ struct runsim {
     }
     void step(int addr) {
         self->step(self->private_data, addr);
+    }
+    int get_phys_page(int blk, int pg) {
+        if (self->get_physpage == NULL)
+            return -1;
+        else
+            return self->get_physpage(self->private_data, blk, pg);
     }
 }
 

@@ -58,6 +58,8 @@ static void int_write(struct lru *lru, int a)
     int phys = p->l2p[a];
 
     lru->int_writes++;
+
+    runsim_stats_write(&p->lru->handle, a, p->head / p->lru->Np, p->head % p->lru->Np);
     
     if (phys != -1)             /* invalidate old mapping */
         p->p2l[phys] = -1;
@@ -66,7 +68,13 @@ static void int_write(struct lru *lru, int a)
     p->p2l[phys] = a;
     p->l2p[a] = phys;
 
+    /* if we just finished a full block, calculate the block number
+       and report it to the stats handler. */
+    if ((p->head % p->lru->Np) == p->lru->Np - 1) 
+        runsim_stats_enter(&p->lru->handle, p->head / p->lru->Np);
+
     p->head = (p->head + 1) % p->T;
+
 }
 
 static void host_write(struct lru *lru, int a)
@@ -80,15 +88,16 @@ static void host_write(struct lru *lru, int a)
      */
     while ((p->tail + p->T - p->head) % p->T < 2 * lru->Np) {
         int i, nv;
-        for (i = nv = 0; i < lru->Np; i++) {
-            int a2 = p->p2l[p->tail];
-            if (a2 != -1) {
-                int_write(lru, a2);
+        for (i = nv = 0; i < lru->Np; i++) 
+            if (p->p2l[p->tail+i] != -1)
                 nv++;
-            }
+        runsim_stats_exit(&lru->handle, nv, p->tail / p->lru->Np);
+        for (i = 0; i < lru->Np; i++) {
+            int a2 = p->p2l[p->tail];
+            if (a2 != -1) 
+                int_write(lru, a2);
             p->tail = (p->tail + 1) % p->T;
         }
-        runsim_stats_exit(&lru->handle, lru->Np, nv);
     }
 
     /* then write the user data
@@ -103,12 +112,23 @@ static void lru_step(void *private_data, int a)
     host_write(lru, a);
 }
 
+int lru_get_phys_page(void *private_data, int blk, int pg)
+{
+    struct lru *lru = private_data;
+    if (blk < 0 || blk >= lru->T || pg < 0 || pg >= lru->Np)
+        return -1;
+    struct lru_private *p = lru->private_data;
+    return p->p2l[lru->Np * blk + pg];
+}
+    
 struct lru *lru_new(int T, int U, int Np)
 {
     struct lru *val = calloc(sizeof(*val), 1);
     val->handle.private_data = val;
     val->handle.step = lru_step;
+    val->handle.get_physpage = lru_get_phys_page;
     val->T = T; val->U = U; val->Np = Np;
+    
     lru_init(val);
 
     int i;
