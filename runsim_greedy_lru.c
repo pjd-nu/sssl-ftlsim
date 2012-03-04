@@ -65,6 +65,17 @@ struct greedylru_private {
     int Np;
 };
 
+static int get_phys_page(void *private_data, int blknum, int pgnum)
+{
+    struct greedylru *g = private_data;
+    struct greedylru_private *gp = g->private_data;
+
+    if (blknum >= gp->parent->T || blknum < 0 || pgnum >= gp->Np || pgnum < 0)
+        return -1;
+    struct block *b = gp->blocks + blknum;
+    return b->lba[pgnum];
+}
+
 /* put a block back on the free list */
 static void blk_free(struct greedylru_private *gp, struct block *b)
 {
@@ -144,6 +155,9 @@ static void int_write(struct greedylru_private *gp, int a)
 
     /* write the data */
     int i = gp->frontier->i++;
+    int blknum = gp->frontier - gp->blocks;
+    runsim_stats_write(&gp->parent->handle, a, blknum, i);
+
     gp->frontier->lba[i] = a;
     gp->rmap[a].b = gp->frontier;
     gp->rmap[a].page = i;
@@ -151,6 +165,7 @@ static void int_write(struct greedylru_private *gp, int a)
 
     /* if the block is full, it goes on the LRU queue and we get another */
     if (gp->frontier->i == gp->Np) {
+        runsim_stats_enter(&gp->parent->handle, gp->frontier - gp->blocks);
         queue_block(gp, gp->frontier);
         gp->frontier = blk_alloc(gp);
     }
@@ -165,6 +180,7 @@ static void host_write(struct greedylru_private *gp, int a)
 
     while (gp->nfree < gp->parent->target_free) {
         struct block *b = get_greedy_block(gp);
+        runsim_stats_exit(&gp->parent->handle, b->n_valid, b - gp->blocks);
         for (i = 0; i < gp->Np; i++)
             if (b->lba[i] >= 0) 
                 int_write(gp, b->lba[i]);
@@ -215,6 +231,7 @@ struct greedylru *greedylru_new(int T, int U, int Np)
     struct greedylru *val = calloc(sizeof(*val), 1);
     val->handle.private_data = val;
     val->handle.step = greedylru_step;
+    val->handle.get_physpage = get_phys_page;
     val->T = T; val->U = U; val->Np = Np;
     val->target_free = 1;
     val->lru_max = U;
