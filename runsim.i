@@ -14,20 +14,17 @@
 %}
 
 struct runsim {
-    struct getaddr *generator;
     PyObject *stats_exit;       /* blocks at cleaning time */
     PyObject *stats_enter;      /* blocks entering pool */
     PyObject *stats_write;      /* every write */
+    PyObject *generator;
 };
 %extend runsim {
-    void run(int steps) {
-        struct getaddr *gen = self->generator;
-        int i, a = gen->getaddr(gen->private_data);
-        for (i = 0; i < steps && a != -1; i++) {
-            self->step(self->private_data, a);
-            a = gen->getaddr(gen->private_data);
-        }
-    }
+    %insert("python") %{
+        def run(self, nsteps):
+            for a in self.generator.next_n(nsteps):
+                self.step(a)
+    %}
     void step(int addr) {
         self->step(self->private_data, addr);
     }

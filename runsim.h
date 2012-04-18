@@ -39,6 +39,16 @@ struct greedylru {
 struct greedylru *greedylru_new(int T, int U, int Np);
 void greedylru_del(struct greedylru *g);
 
+struct fast {
+    struct runsim handle;
+    int T, U, Np;
+    int int_writes, ext_writes;
+    struct fast_private *private_data;
+};
+
+struct fast *fast_new(int T, int U, int Np);
+void fast_del(struct fast *f);
+
 void runsim_stats_exit(struct runsim *sim, int n_valid, int blknum);
 void runsim_stats_enter(struct runsim *sim, int blknum);
 void runsim_stats_write(struct runsim *sim, int addr, int blknum, int pg);
