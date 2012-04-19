@@ -1,16 +1,15 @@
 /*
- * file:        runsim.i
+ * file:        newsim.i
  * description: SWIG interface for multiple FTL simulation engines
  *
  * Peter Desnoyers, Northeastern University, 2012
  */
 
-%module runsim
+%module newsim
 
 %{
 #define SWIG_FILE_WITH_INIT
-#include "ftlsim.h"
-#include "runsim.h"
+#include "newsim.h"
 %}
 
 struct int_array {          /* kludge for indexed arrays */
@@ -22,43 +21,6 @@ struct int_array {          /* kludge for indexed arrays */
         return self + i;
     }
  }
-
-struct runsim {
-    PyObject *stats_exit;       /* blocks at cleaning time */
-    PyObject *stats_enter;      /* blocks entering pool */
-    PyObject *stats_write;      /* every write */
-    PyObject *generator;
-};
-%extend runsim {
-    %insert("python") %{
-        def run(self, nsteps):
-            for a in self.generator.next_n(nsteps):
-                self.step(a)
-    %}
-    void step(int addr) {
-        self->step(self->private_data, addr);
-    }
-    int get_phys_page(int blk, int pg) {
-        if (self->get_physpage == NULL)
-            return -1;
-        else
-            return self->get_physpage(self->private_data, blk, pg);
-    }
-}
-
-struct lru {
-    struct runsim handle;
-    int T, U, Np;
-    int int_writes, ext_writes;
-};
-%extend lru {
-    lru(int T, int U, int Np) {
-        return lru_new(T, U, Np);
-    }
-    ~lru() {
-        lru_del(self);
-    }
-}
 
 struct flash_block {
     int  n_valid;
@@ -75,6 +37,8 @@ struct flash_block {
     void write(int page, int lba) {
         assert(page < self->Np && page >= 0 && self->lba[page] == -1);
         self->lba[page] = lba;
+        self->pool->map->map[lba].block = self;
+        self->pool->map->map[lba].page_num = page;
         self->n_valid++;
     }
     void overwrite(int page, int lba) {
@@ -106,7 +70,6 @@ struct rmap {
 }
 
 struct lru_pool {
-    struct runsim handle;
     struct flash_block *frontier;
     int i, pages_valid, pages_invalid;
 };

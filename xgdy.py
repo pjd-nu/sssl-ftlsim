@@ -40,7 +40,7 @@ for S_f in (0.07, 0.10):
     a = genaddr.trace(file)
     doit(genaddr.scramble(a, U*Np))
 
-    for n in 10000 100000 1000000:
+    for n in (10000, 100000, 1000000):
         print 'time shuffled 1/line', n
         fp = open('writes-4k-pg.dat', 'r')
         doit(genaddr.trace(genaddr.shuffle(fp, n)))

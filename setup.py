@@ -1,21 +1,20 @@
 #!/usr/bin/env python
 """
-setup.py file for getaddr
+setup.py file for simulator
 """
 
 from distutils.core import setup, Extension
 
 
-runsim_module = Extension('_runsim', 
-                           sources=['runsim.i', 'runsim_lru.c', 'runsim_greedy.c',
-                                    'runsim_greedy_lru.c', 'runsim.c'],
+sim_module = Extension('_newsim', 
+                           sources=['newsim.i', 'multi-pool.c'],
                            )
 
-setup (name = 'ftlsim',
+setup (name = 'newsim',
        version = '0.1',
        author      = "Peter Desnoyers",
        author_email = "pjd@ccs.neu.edu",
        description = """Modular high-speed FTL simulator""",
-       ext_modules = [runsim_module],
-       py_modules = ["genaddr", "runsim"],
+       ext_modules = [sim_module],
+       py_modules = ["genaddr", "newsim"]
        )

@@ -32,8 +32,15 @@ class uniform(genaddr):
         genaddr.__init__(self)
         self.max = max
 
+    def addrs(self):
+        while True:
+            yield(random.randint(0, self.max-1))
+
     def next(self):
         return random.randint(0, self.max-1)
+
+    def next10(self):
+        return [random.randint(0, self.max-1) for i in range(10)]
 
 
 # probabilistic mix of multiple sources
@@ -78,12 +85,9 @@ class trace(genaddr):
     def _iter(self):
         for l in self.fp:
             vals = l.split()
-            if len(vals) == 1:
-                yield(int(vals[0]))
-            else:
-                (a,n) = map(int, vals)
-                for i in range(a, a+n):
-                    yield(i)
+            (a,n) = map(int, vals)
+            for i in range(a, a+n):
+                yield(i)
         self.eof = True
 
 # shuffle input in the space domain.
