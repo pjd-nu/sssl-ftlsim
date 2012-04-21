@@ -6,7 +6,7 @@ setup.py file for simulator
 from distutils.core import setup, Extension
 
 
-sim_module = Extension('_newsim', sources=['newsim.i', 'multi-pool.c',])
+sim_module = Extension('_ftlsim', sources=['ftlsim.i', 'ftlsim.c',])
 adr_module = Extension('_getaddr', sources=['getaddr.i', 'getaddr.c'] )
 w_module = Extension('_lambertw', sources=['lambertw.i', 'lambertw.c'] )
 
@@ -16,5 +16,5 @@ setup (name = 'newsim',
        author_email = "pjd@ccs.neu.edu",
        description = """Modular high-speed FTL simulator""",
        ext_modules = [sim_module, adr_module, w_module],
-       py_modules = ["genaddr", "newsim", "getaddr", "lambertw"]
+       py_modules = ["genaddr", "ftlsim", "getaddr", "lambertw"]
        )

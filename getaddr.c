@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "newsim.h"
+#include "ftlsim.h"
 #include "getaddr.h"
 
 int seq_get(void *private_data)

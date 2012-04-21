@@ -12,7 +12,7 @@
 
 %{
 #define SWIG_FILE_WITH_INIT
-#include "newsim.h"
+#include "ftlsim.h"
 #include "getaddr.h"
 %}
 

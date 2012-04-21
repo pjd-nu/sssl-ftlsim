@@ -53,5 +53,15 @@ Numbers can be decimal or hex in 0x... format.
 Applies a random permutation to addresses from <generator> to remove
 any spatial locality.
 
+genaddr.py - python version of traffic generator
 
+lambertw - the Lambert W function, for calculating optimal cleaning
 
+ftlsim - FTL simulator, with the following types:
+
+segment: a physical flash block
+  .n_valid - number of valid pages in block
+  .lbas[].val - array [0..Np-1] of LBAs (-1 for invalid pages)
+constructor: segment(Np)
+
+rmap: 

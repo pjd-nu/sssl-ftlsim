@@ -1,5 +1,5 @@
 /*
- * file:        runsim_pool.c
+ * file:        ftlsim.c
  * description: Simple, fast multi-pool FTL simulator
  *
  * Peter Desnoyers, Northeastern University, 2012
@@ -10,12 +10,12 @@
 #include <assert.h>
 #include <Python.h>
 
-#include "newsim.h"
+#include "ftlsim.h"
 
-struct flash_block *flash_block_new(int Np)
+struct segment *segment_new(int Np)
 {
     int i;
-    struct flash_block *fb = calloc(sizeof(*fb), 1);
+    struct segment *fb = calloc(sizeof(*fb), 1);
     fb->Np = Np;
     fb->lba = calloc(Np * sizeof(int), 1);
     for (i = 0; i < Np; i++)
@@ -25,22 +25,22 @@ struct flash_block *flash_block_new(int Np)
     return fb;
 }
 
-void flash_block_del(struct flash_block *fb)
+void segment_del(struct segment *fb)
 {
     free(fb->lbas);
     free(fb);
 }
 
-void do_flash_block_write(struct flash_block *self, int page, int lba)
+void do_segment_write(struct segment *self, int page, int lba)
 {
     assert(page < self->Np && page >= 0 && self->lba[page] == -1);
     self->lba[page] = lba;
-    self->pool->map->map[lba].block = self;
-    self->pool->map->map[lba].page_num = page;
+    self->pool->ftl->map[lba].block = self;
+    self->pool->ftl->map[lba].page_num = page;
     self->n_valid++;
 }
 
-void do_flash_block_overwrite(struct flash_block *self, int page, int lba)
+void do_segment_overwrite(struct segment *self, int page, int lba)
 {
     assert(page < self->Np && page >= 0 && self->lba[page] == lba);
     self->lba[page] = -1;
@@ -49,35 +49,35 @@ void do_flash_block_overwrite(struct flash_block *self, int page, int lba)
         self->pool->pages_valid--;
 }
 
-struct rmap *rmap_new(int T, int Np)
+struct ftl *ftl_new(int T, int Np)
 {
-    struct rmap *rmap = calloc(sizeof(*rmap), 1);
-    rmap->T = T;
-    rmap->Np = Np;
-    rmap->map = calloc(sizeof(*rmap->map)*T*Np, 1);
+    struct ftl *ftl = calloc(sizeof(*ftl), 1);
+    ftl->T = T;
+    ftl->Np = Np;
+    ftl->map = calloc(sizeof(*ftl->map)*T*Np, 1);
 
-    return rmap;
+    return ftl;
 }
 
-void rmap_del(struct rmap *rmap)
+void ftl_del(struct ftl *ftl)
 {
-    struct flash_block *b;
-    while ((b = do_get_blk(rmap)) != NULL)
-        flash_block_del(b);
-    free(rmap->map);
-    free(rmap);
+    struct segment *b;
+    while ((b = do_get_blk(ftl)) != NULL)
+        segment_del(b);
+    free(ftl->map);
+    free(ftl);
 }
 
-void do_put_blk(struct rmap *self, struct flash_block *blk)
+void do_put_blk(struct ftl *self, struct segment *blk)
 {
     blk->next = self->free_list;
     self->free_list = blk;
     self->nfree++;
 }
 
-struct flash_block *do_get_blk(struct rmap *self)
+struct segment *do_get_blk(struct ftl *self)
 {
-    struct flash_block *val = self->free_list;
+    struct segment *val = self->free_list;
     if (val != NULL) {
         self->free_list = val->next;
         self->nfree--;
@@ -85,33 +85,33 @@ struct flash_block *do_get_blk(struct rmap *self)
     return val;
 }
 
-void do_rmap_run(struct rmap *rmap, struct getaddr *addrs, int count)
+void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
 {
     int i, j;
     for (i = 0; i < count; i++) {
         int lba = addrs->getaddr(addrs);
         if (lba == -1)
             return;
-        struct pool *pool = rmap->get_input_pool(rmap, lba);
+        struct pool *pool = ftl->get_input_pool(ftl, lba);
         if (pool == NULL)
             return;
-        rmap->ext_writes++;
-        rmap->write_seq++;
-        for (; pool->last_write < rmap->write_seq; pool->last_write++)
+        ftl->ext_writes++;
+        ftl->write_seq++;
+        for (; pool->last_write < ftl->write_seq; pool->last_write++)
             pool->rate *= ewma_rate;
         pool->rate += (1-ewma_rate);
         
-        pool->write(rmap, pool, lba);
-        while (rmap->nfree < rmap->minfree) {
-            pool = rmap->get_pool_to_clean(rmap);
-            struct flash_block *b = pool->getseg(pool);
+        pool->write(ftl, pool, lba);
+        while (ftl->nfree < ftl->minfree) {
+            pool = ftl->get_pool_to_clean(ftl);
+            struct segment *b = pool->getseg(pool);
             struct pool *next = pool->next_pool;
             if (pool == NULL)
                 return;
             for (j = 0; j < b->Np; j++)
                 if (b->lba[j] != -1) 
-                    next->write(rmap, next, b->lba[j]);
-            do_put_blk(rmap, b);
+                    next->write(ftl, next, b->lba[j]);
+            do_put_blk(ftl, b);
         }
     }
 }
@@ -119,10 +119,10 @@ void do_rmap_run(struct rmap *rmap, struct getaddr *addrs, int count)
 /* cleaning - grab the tail of the pool. the caller of this function
  * is responsible for copying the remaining valid pages.
  */
-struct flash_block *lru_pool_getseg(struct pool *pool)
+struct segment *lru_pool_getseg(struct pool *pool)
 {
     assert(pool->tail != NULL);
-    struct flash_block *val = pool->tail;
+    struct segment *val = pool->tail;
     pool->tail = val->prev;
     pool->tail->next = NULL;
     val->in_pool = 0;
@@ -145,7 +145,7 @@ double lru_tail_utilization(struct pool *pool)
 /* After the current write frontier fills, call this function to move
  * it to the pool and provide a new write frontier.
  */
-void lru_pool_addseg(struct pool *pool, struct flash_block *fb)
+void lru_pool_addseg(struct pool *pool, struct segment *fb)
 {
     assert(pool->i == pool->Np);
     assert(fb->n_valid == 0 && fb->in_pool == 0);
@@ -174,28 +174,28 @@ void lru_pool_del(struct pool *pool)
 }
 double ewma_rate = 0.95;
 
-static void lru_int_write(struct rmap *rmap, struct pool *pool, int lba)
+static void lru_int_write(struct ftl *ftl, struct pool *pool, int lba)
 {
-    rmap->int_writes++;
-    struct flash_block *b = rmap->map[lba].block;
-    int page = rmap->map[lba].page_num;
+    ftl->int_writes++;
+    struct segment *b = ftl->map[lba].block;
+    int page = ftl->map[lba].page_num;
     if (b != NULL) 
-        do_flash_block_overwrite(b, page, lba);
-    do_flash_block_write(pool->frontier, pool->i++, lba);
+        do_segment_overwrite(b, page, lba);
+    do_segment_write(pool->frontier, pool->i++, lba);
     if (pool->i >= pool->Np) {
-        b = do_get_blk(rmap);
+        b = do_get_blk(ftl);
         lru_pool_addseg(pool, b);
     }
 }
 
-struct pool *lru_pool_new(struct rmap *map, int Np)
+struct pool *lru_pool_new(struct ftl *ftl, int Np)
 {
     struct pool *val = calloc(sizeof(*val), 1);
-    val->map = map;
+    val->ftl = ftl;
     val->Np = Np;
 
-    int i = map->npools++;
-    map->pools[i] = val;
+    int i = ftl->npools++;
+    ftl->pools[i] = val;
 
     val->addseg = lru_pool_addseg;
     val->getseg = lru_pool_getseg;
@@ -206,7 +206,7 @@ struct pool *lru_pool_new(struct rmap *map, int Np)
     return val;
 }
 
-static void list_add(struct flash_block *b, struct flash_block *list)
+static void list_add(struct segment *b, struct segment *list)
 {
     b->next = list;
     b->prev = list->prev;
@@ -214,21 +214,21 @@ static void list_add(struct flash_block *b, struct flash_block *list)
     list->prev = b;
 }
 
-static void list_rm(struct flash_block *b)
+static void list_rm(struct segment *b)
 {
     b->prev->next = b->next;
     b->next->prev = b->prev;
     b->next = b->prev = b;
 }
 
-static int list_empty(struct flash_block *b)
+static int list_empty(struct segment *b)
 {
     return b->next == b;
 }
 
-static struct flash_block *list_pop(struct flash_block *list)
+static struct segment *list_pop(struct segment *list)
 {
-    struct flash_block *b = list->next;
+    struct segment *b = list->next;
     list_rm(b);
     return b;
 }
@@ -248,11 +248,11 @@ static double greedy_tail_utilization(struct pool *pool)
     return (double)greedy_tail_n_valid(pool) / (double)pool->Np;
 }
 
-static struct flash_block *greedy_pool_getseg(struct pool *pool)
+static struct segment *greedy_pool_getseg(struct pool *pool)
 {
     int i = greedy_tail_n_valid(pool);
     assert(i < pool->Np);
-    struct flash_block *b = list_pop(&pool->bins[i]);
+    struct segment *b = list_pop(&pool->bins[i]);
     b->in_pool = 0;
 
     pool->pages_valid -= b->n_valid;
@@ -261,14 +261,14 @@ static struct flash_block *greedy_pool_getseg(struct pool *pool)
     return b;
 }
 
-static void greedy_pool_addseg(struct pool *pool, struct flash_block *fb)
+static void greedy_pool_addseg(struct pool *pool, struct segment *fb)
 {
     assert(pool->i == pool->Np);
     assert(fb->n_valid == 0 && fb->in_pool == 0);
 
     pool->i = 0;                /* page pointer for new block */
 
-    struct flash_block *blk = pool->frontier;
+    struct segment *blk = pool->frontier;
     if (blk != NULL) {
         pool->frontier->in_pool = 1; /* old frontier is now in pool */
         pool->pages_valid += pool->frontier->n_valid;
@@ -283,13 +283,13 @@ static void greedy_pool_addseg(struct pool *pool, struct flash_block *fb)
     fb->pool = pool;
 }
 
-static void greedy_int_write(struct rmap *rmap, struct pool *pool, int lba)
+static void greedy_int_write(struct ftl *ftl, struct pool *pool, int lba)
 {
-    rmap->int_writes++;
-    struct flash_block *b = rmap->map[lba].block;
-    int page = rmap->map[lba].page_num;
+    ftl->int_writes++;
+    struct segment *b = ftl->map[lba].block;
+    int page = ftl->map[lba].page_num;
     if (b != NULL) {
-        do_flash_block_overwrite(b, page, lba);
+        do_segment_overwrite(b, page, lba);
         if (b->in_pool) {
             list_rm(b);
             list_add(b, &b->pool->bins[b->n_valid]);
@@ -298,9 +298,9 @@ static void greedy_int_write(struct rmap *rmap, struct pool *pool, int lba)
         }
     }
     
-    do_flash_block_write(pool->frontier, pool->i++, lba);
+    do_segment_write(pool->frontier, pool->i++, lba);
     if (pool->i >= pool->Np) {
-        b = do_get_blk(rmap);
+        b = do_get_blk(ftl);
         greedy_pool_addseg(pool, b);
     }
 }
@@ -311,14 +311,14 @@ static void greedy_pool_del(struct pool *pool)
     free(pool);
 }
 
-struct pool *greedy_pool_new(struct rmap *map, int Np)
+struct pool *greedy_pool_new(struct ftl *ftl, int Np)
 {
     struct pool *pool = calloc(sizeof(*pool), 1);
-    pool->map = map;
+    pool->ftl = ftl;
     pool->Np = Np;
 
-    int i = map->npools++;
-    map->pools[i] = pool;
+    int i = ftl->npools++;
+    ftl->pools[i] = pool;
 
     pool->bins = calloc((Np+1) * sizeof(*pool->bins), 1);
     for (i = 0; i <= Np; i++)
@@ -333,12 +333,12 @@ struct pool *greedy_pool_new(struct rmap *map, int Np)
     return pool;
 }
 
-static struct pool *do_select_first(struct rmap* map, int lba)
+static struct pool *do_select_first(struct ftl* ftl, int lba)
 {
-    return map->pools[0];
+    return ftl->pools[0];
 }
 
-static struct pool *do_select_top_down(struct rmap* map, int lba)
+static struct pool *do_select_top_down(struct ftl* ftl, int lba)
 {
     return NULL;
 }
@@ -349,10 +349,10 @@ void return_pool(struct pool *pool)
     pool_retval = pool;
 }
 
-static struct pool *python_select_1_arg(struct rmap *map, int lba)
+static struct pool *python_select_1_arg(struct ftl *ftl, int lba)
 {
     PyObject *args = Py_BuildValue("(i)", lba);
-    PyObject *result = PyEval_CallObject(map->get_input_pool_arg, args);
+    PyObject *result = PyEval_CallObject(ftl->get_input_pool_arg, args);
     if (PyErr_Occurred()) 
         PyErr_Print();
     if (result != NULL) {
@@ -366,16 +366,16 @@ write_selector_t write_select_first = do_select_first;
 write_selector_t write_select_top_down = do_select_top_down;
 write_selector_t write_select_python = python_select_1_arg;
 
-static struct pool *do_clean_select_first(struct rmap *map)
+static struct pool *do_clean_select_first(struct ftl *ftl)
 {
-    return map->pools[0];
+    return ftl->pools[0];
 }
 clean_selector_t clean_select_first = do_clean_select_first;
 
-static struct pool *python_select_no_arg(struct rmap *map)
+static struct pool *python_select_no_arg(struct ftl *ftl)
 {
     PyObject *args = Py_BuildValue("()");
-    PyObject *result = PyEval_CallObject(map->get_pool_to_clean_arg, args);
+    PyObject *result = PyEval_CallObject(ftl->get_pool_to_clean_arg, args);
     if (PyErr_Occurred()) 
         PyErr_Print();
     if (result != NULL) {
