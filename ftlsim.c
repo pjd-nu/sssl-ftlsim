@@ -85,6 +85,14 @@ struct segment *do_get_blk(struct ftl *self)
     return val;
 }
 
+static void check_new_segment(struct ftl *ftl, struct pool *pool)
+{
+    if (pool->i >= pool->Np) {
+        struct segment *b = do_get_blk(ftl);
+        pool->addseg(pool, b);
+    }
+}
+
 void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
 {
     int i, j;
@@ -102,6 +110,8 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
         pool->rate += (1-ewma_rate);
         
         pool->write(ftl, pool, lba);
+        check_new_segment(ftl, pool);
+        
         while (ftl->nfree < ftl->minfree) {
             pool = ftl->get_pool_to_clean(ftl);
             struct segment *b = pool->getseg(pool);
@@ -109,8 +119,10 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
             if (pool == NULL)
                 return;
             for (j = 0; j < b->Np; j++)
-                if (b->lba[j] != -1) 
+                if (b->lba[j] != -1) {
                     next->write(ftl, next, b->lba[j]);
+                    check_new_segment(ftl, pool);
+                }
             do_put_blk(ftl, b);
         }
     }
@@ -182,10 +194,6 @@ static void lru_int_write(struct ftl *ftl, struct pool *pool, int lba)
     if (b != NULL) 
         do_segment_overwrite(b, page, lba);
     do_segment_write(pool->frontier, pool->i++, lba);
-    if (pool->i >= pool->Np) {
-        b = do_get_blk(ftl);
-        lru_pool_addseg(pool, b);
-    }
 }
 
 struct pool *lru_pool_new(struct ftl *ftl, int Np)
@@ -299,10 +307,6 @@ static void greedy_int_write(struct ftl *ftl, struct pool *pool, int lba)
     }
     
     do_segment_write(pool->frontier, pool->i++, lba);
-    if (pool->i >= pool->Np) {
-        b = do_get_blk(ftl);
-        greedy_pool_addseg(pool, b);
-    }
 }
 
 static void greedy_pool_del(struct pool *pool)

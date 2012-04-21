@@ -65,21 +65,15 @@ struct ftl {
     ftl(int T, int Np) {
         return ftl_new(T, Np);
     }
-    void xx(void) {
-        printf("111\n");
-        printf("%p\n", self->get_input_pool_arg);
-        void *x = self->get_input_pool(self, 1);
-        printf("%p\n", x);
-    }
-    struct segment *find_blk(int lba) {
-        assert(lba >= 0 && lba < self->T * self->Np);
-        return self->map[lba].block;
-    }
     void put_blk(struct segment *blk) {
         do_put_blk(self, blk);
     }
     struct segment *get_blk(void) {
         return do_get_blk(self);
+    }
+    struct segment *find_blk(int lba) {
+        assert(lba >= 0 && lba < self->T * self->Np);
+        return self->map[lba].block;
     }
     int find_page(int lba) {
         assert(lba >= 0 && lba < self->T * self->Np);
@@ -110,10 +104,10 @@ struct pool {
             return greedy_pool_new(ftl, Np);
         return NULL;
     }
-    void add_block(struct segment *blk) {
+    void add_segment(struct segment *blk) {
         self->addseg(self, blk);
     }
-    struct segment *remove_block(void) {
+    struct segment *remove_segment(void) {
         return self->getseg(self);
     }
     void write(int lba) {

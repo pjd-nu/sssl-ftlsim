@@ -60,8 +60,70 @@ lambertw - the Lambert W function, for calculating optimal cleaning
 ftlsim - FTL simulator, with the following types:
 
 segment: a physical flash block
-  .n_valid - number of valid pages in block
-  .lbas[].val - array [0..Np-1] of LBAs (-1 for invalid pages)
-constructor: segment(Np)
+  ftlsim.segment(Np) - constructor
+  segment.n_valid - number of valid pages in block
+  segment.lbas[].val - array [0..Np-1] of LBAs (-1 for invalid pages)
 
-rmap: 
+ftl: FTL instance. It holds a single reverse map [lba to segment,page], 
+     and a set of pools, each of which has a write frontier plus
+     additional blocks
+
+  ftlsim.ftl(T, Np) - creates a new FTL instance with a reverse map for
+       	     T total segments, with segment size Np.
+	     (whoops - should be 'U', I think?)
+
+  ftl.int_writes, .ext_writes - internal and external write count
+  ftl.nfree, .minfree - current number of free segments, target minimum #
+  ftl.get_input_pool - which pool to write to. possible values are:
+  		  write_select_first
+		  write_select_top_down
+		  write_select_python - evaluates 'get_input_pool_arg'
+  ftl.get_pool_to_clean - which one to clean a segment from. Values:
+  		  clean_select_first
+		  clean_select_python - evaluates 'get_pool_to_clean_arg'
+
+return_pool():
+  Due to SWIG limitations, Python callbacks 'get_input_pool_arg' and
+  'get_pool_to_clean_arg' don't provide their result as a return value,
+  but instead pass it to 'return_pool'
+
+  ftl.put_blk(), ftl.get_blk() - directly maintain the ftl freelist. On
+	  	    startup you need to create T segments, set
+	  	    .thisown = False on each, and pass them to
+	  	    ftl.put_blk() before running the simulation. 
+
+  ftl.run(addrgen, count) - run using addresses from 'addrgen' for 'count'
+  	     	      iterations 
+
+Only needed for replacing ftl.run():
+  ftl.find_blk(lba) - returns segment object for physical block holding 'lba'
+  ftl.find_page(lba) - find the corresponding page number in the block
+  	         (how do I get SWIG to return a pair?)
+
+ftlsim.pool: a write frontier and associated pool of segments
+  ftlsim.pool(ftl, type, Np) - create a pool associated with FTL instance
+	  	'ftl'. 'type' is "lru" or "greedy"
+
+  pool.frontier, .i - write frontier, next page to write in frontier segment
+  pool.pages_valid, .pages_invalid - total valid and invalid pages, not
+  		  counting the write frontier
+  pool.next_pool - where cleaned pages from this pool get written
+  pool.rate - EWMA of relative write rate to this pool (out of
+  	  1.0). Smoothing constant can be adjusted by changing
+  	  'ewma_rate' (default 0.95)
+
+  pool.add_segment(segment) - add a segment to a pool. Need to do this for
+		 the first segment; after that it should be handled
+		 within run()
+
+Note that the following two are only used if you're replacing
+ftl.run() with Python code.
+
+  ftl.remove_segment() - get a segment for cleaning according to the pool
+		 policy. (e.g. LRU or Greedy)
+
+  ftl.write(lba) - perform a write
+
+Files:
+
+

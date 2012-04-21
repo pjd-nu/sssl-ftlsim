@@ -1,9 +1,9 @@
 import genaddr
-import newsim
+import ftlsim
 import sys
 
-U = 23020
-Np = 128
+U = 2302
+Np = 64
 
 src = genaddr.uniform(U*Np)
 
@@ -12,13 +12,13 @@ alpha = 1 / (1-S_f)
 minfree = Np
 T = int(U * alpha) + minfree
 
-rmap = newsim.rmap(T, Np)
-lru = newsim.lru_pool(rmap, Np)
-freelist = [newsim.flash_block(Np) for i in range(T)]
+rmap = ftlsim.ftl(T, Np)
+lru = ftlsim.pool(rmap, "lru", Np)
+freelist = [ftlsim.segment(Np) for i in range(T)]
 for b in freelist:
     b.thisown = False
 
-lru.add_block(freelist.pop())
+lru.add_segment(freelist.pop())
 
 intwrites = 0
 extwrites = 0
@@ -36,7 +36,7 @@ def int_write(lba):
     f.write(lru.i, lba)
     lru.i += 1
     if lru.i >= Np:
-        lru.add_block(freelist.pop())
+        lru.add_segment(freelist.pop())
         
     
 def host_write(lba):
@@ -45,8 +45,9 @@ def host_write(lba):
     extwrites += 1
 
     int_write(lba)
+    
     while len(freelist) < minfree:
-        b = lru.remove_block()
+        b = lru.remove_segment()
         for i in range(Np):
             a = b.lbas[i].val
             if a != -1:
