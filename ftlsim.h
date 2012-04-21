@@ -12,6 +12,7 @@ struct int_array {          /* kludge for indexed arrays */
 };
 
 struct segment {
+    int magic;                  /* 5E65e65e */
     struct segment *next, *prev;
     int  Np;
     int *lba;            /* lba[0..Np-1] = LBA / -1 */
@@ -39,6 +40,7 @@ extern clean_selector_t clean_select_python;
 extern void return_pool(struct pool *);
 
 struct ftl {
+    int magic;                  /* Fff77711 */
     struct segment *free_list;
     struct {
         struct segment *block;
@@ -70,6 +72,7 @@ struct getaddr {
 };
 
 struct pool {
+    int magic;                  /* 60016001 */
     struct ftl *ftl;
     struct segment *frontier, *tail;
     int Np, int_writes, ext_writes, i;

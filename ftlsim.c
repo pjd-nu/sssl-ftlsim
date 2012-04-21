@@ -16,6 +16,7 @@ struct segment *segment_new(int Np)
 {
     int i;
     struct segment *fb = calloc(sizeof(*fb), 1);
+    fb->magic = 0x5E65e65e;
     fb->Np = Np;
     fb->lba = calloc(Np * sizeof(int), 1);
     for (i = 0; i < Np; i++)
@@ -27,6 +28,7 @@ struct segment *segment_new(int Np)
 
 void segment_del(struct segment *fb)
 {
+    fb->magic = 0;
     free(fb->lbas);
     free(fb);
 }
@@ -52,6 +54,7 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
 struct ftl *ftl_new(int T, int Np)
 {
     struct ftl *ftl = calloc(sizeof(*ftl), 1);
+    ftl->magic = 0xFff77711;
     ftl->T = T;
     ftl->Np = Np;
     ftl->map = calloc(sizeof(*ftl->map)*T*Np, 1);
@@ -62,6 +65,7 @@ struct ftl *ftl_new(int T, int Np)
 void ftl_del(struct ftl *ftl)
 {
     struct segment *b;
+    ftl->magic = 0;
     while ((b = do_get_blk(ftl)) != NULL)
         segment_del(b);
     free(ftl->map);
@@ -182,6 +186,7 @@ void lru_pool_addseg(struct pool *pool, struct segment *fb)
 
 void lru_pool_del(struct pool *pool)
 {
+    pool->magic = 0;
     free(pool);
 }
 double ewma_rate = 0.95;
@@ -199,6 +204,8 @@ static void lru_int_write(struct ftl *ftl, struct pool *pool, int lba)
 struct pool *lru_pool_new(struct ftl *ftl, int Np)
 {
     struct pool *val = calloc(sizeof(*val), 1);
+    val->magic = 0x60016001;
+    
     val->ftl = ftl;
     val->Np = Np;
 
@@ -311,6 +318,7 @@ static void greedy_int_write(struct ftl *ftl, struct pool *pool, int lba)
 
 static void greedy_pool_del(struct pool *pool)
 {
+    pool->magic = 0;
     free(pool->bins);
     free(pool);
 }
@@ -318,6 +326,7 @@ static void greedy_pool_del(struct pool *pool)
 struct pool *greedy_pool_new(struct ftl *ftl, int Np)
 {
     struct pool *pool = calloc(sizeof(*pool), 1);
+    pool->magic = 0x60016002;
     pool->ftl = ftl;
     pool->Np = Np;
 

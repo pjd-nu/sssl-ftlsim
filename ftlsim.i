@@ -110,6 +110,9 @@ struct pool {
     struct segment *remove_segment(void) {
         return self->getseg(self);
     }
+    double tail_util(void) {
+        return self->tail_utilization(self);
+    }
     void write(int lba) {
         self->write(self->ftl, self, lba);
     }

@@ -131,3 +131,7 @@ Files:
   lambertw.i, lambertw.c
   genaddr.py
 
+Example files:
+  low-level.py - direct Python implementation of cleaning, etc.
+  greedy-high.py, lru-high.py - full-speed versions of naive Greedy
+  		  	        and LRU cleaning
