@@ -2,8 +2,8 @@ import genaddr
 import newsim
 import sys
 
-U = 200
-Np = 16
+U = 23020
+Np = 128
 
 src = genaddr.uniform(U*Np)
 
@@ -60,11 +60,16 @@ for a in range(U*Np):
 print "ready..."
 
 i = 0
+j = 0
 for a in src.addrs():
     host_write(a)
     i += 1
-    if i >= 10000:
+    if i >= U*Np/10:
         i = 0
         print extwrites, intwrites, (1.0*intwrites)/extwrites
         extwrites = 0
         intwrites = 0
+        j += 1
+        if j > 10:
+            break
+

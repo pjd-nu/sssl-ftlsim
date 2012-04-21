@@ -9,6 +9,6 @@
 
 %{
 #define SWIG_FILE_WITH_INIT
-double lambertw(double z)
+double lambertw(double z);
 %}
 double lambertw(double z);

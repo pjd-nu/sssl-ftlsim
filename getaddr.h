@@ -4,6 +4,12 @@
  * Peter Desnoyers, Northeastern University, 2012
  */
 
+struct seq {
+    struct getaddr handle;
+    int next;
+};
+struct seq *seq_new(void);
+
 struct uniform {
     struct getaddr handle;
     int max;

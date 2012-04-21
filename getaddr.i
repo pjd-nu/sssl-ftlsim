@@ -12,9 +12,21 @@
 
 %{
 #define SWIG_FILE_WITH_INIT
-#include "ftlsim.h"
+#include "newsim.h"
 #include "getaddr.h"
 %}
+
+struct seq {
+    struct getaddr handle;
+};
+%extend seq {
+    seq(void) {
+        return seq_new();
+    }
+    ~seq() {
+        free(self);
+    }
+}
 
 struct uniform {
     struct getaddr handle;
@@ -49,7 +61,7 @@ struct mixed {
     struct getaddr handle;
 };
 %extend mixed {
-    mixed() {
+    mixed(void) {
         return mixed_new();
     }
     ~mixed() {

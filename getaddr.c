@@ -11,8 +11,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include "ftlsim.h"
+
+#include "newsim.h"
 #include "getaddr.h"
+
+int seq_get(void *private_data)
+{
+    struct seq *seq = private_data;
+    return seq->next++;
+}
+
+struct seq *seq_new(void)
+{
+    struct seq *seq = calloc(sizeof(*seq), 1);
+    seq->handle.getaddr = seq_get;
+    seq->handle.del = (void*)free;
+    return seq;
+}
 
 int next(struct getaddr *g)
 {

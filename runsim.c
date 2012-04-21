@@ -14,7 +14,6 @@
 static void run_stats(PyObject *f, PyObject *args)
 {
     PyObject *result = PyEval_CallObject(f, args);
-    printf("runstats\n");
     Py_DECREF(args);
     if (result) {
         Py_DECREF(result);

@@ -13,28 +13,21 @@
 #include "runsim.h"
 %}
 
-struct int_array {          /* kludge for indexed arrays */
-    int val;
-};
-
-%extend int_array {
-    struct int_array *__getitem__(int i) {
-        return self + i;
-    }
- }
-
 struct runsim {
+    struct getaddr *generator;
     PyObject *stats_exit;       /* blocks at cleaning time */
     PyObject *stats_enter;      /* blocks entering pool */
     PyObject *stats_write;      /* every write */
-    PyObject *generator;
 };
 %extend runsim {
-    %insert("python") %{
-        def run(self, nsteps):
-            for a in self.generator.next_n(nsteps):
-                self.step(a)
-    %}
+    void run(int steps) {
+        struct getaddr *gen = self->generator;
+        int i, a = gen->getaddr(gen->private_data);
+        for (i = 0; i < steps && a != -1; i++) {
+            self->step(self->private_data, a);
+            a = gen->getaddr(gen->private_data);
+        }
+    }
     void step(int addr) {
         self->step(self->private_data, addr);
     }
@@ -60,68 +53,33 @@ struct lru {
     }
 }
 
-struct flash_block {
-    int  n_valid;
-    struct int_array *lbas;
-};
-
-%extend flash_block {
-    flash_block(int Np) {
-        return flash_block_new(Np);
-    }
-    ~flash_block() {
-        flash_block_del(self);
-    }
-    void write(int page, int lba) {
-        assert(page < self->Np && page >= 0 && self->lba[page] == -1);
-        self->lba[page] = lba;
-        self->n_valid++;
-    }
-    void overwrite(int page, int lba) {
-        assert(page < self->Np && page >= 0 && self->lba[page] == lba);
-        self->lba[page] = -1;
-        self->n_valid--;
-    }
-}
-    
-struct rmap {
-    int int_writes, ext_writes;
-};
-
-%extend rmap {
-    rmap(int T, int Np) {
-        return rmap_new(T, Np);
-    }
-    struct flash_block *find_blk(int lba) {
-        assert(lba >= 0 && lba < self->T * self->Np);
-        return self->map[lba].block;
-    }
-    int find_page(int lba) {
-        assert(lba >= 0 && lba < self->T * self->Np);
-        return self->map[lba].page_num;
-    }
-    ~rmap() {
-        rmap_del(self);
-    }
-}
-
-struct lru_pool {
+struct greedy {
     struct runsim handle;
-    struct flash_block *frontier;
-    int i, pages_valid, pages_invalid;
+    int T, U, Np;
+    int int_writes, ext_writes;
+    int target_free;
 };
-%extend lru_pool {
-    lru_pool(struct rmap *map, int Np) {
-        return lru_pool_new(map, Np);
+%extend greedy {
+    greedy(int T, int U, int Np) {
+        return greedy_new(T, U, Np);
     }
-    void add_block(struct flash_block *blk) {
-        lru_pool_addseg(self, blk);
+    ~greedy() {
+        greedy_del(self);
     }
-    struct flash_block *remove_block(void) {
-        return lru_pool_getseg(self);
+}
+
+struct greedylru {
+    struct runsim handle;
+    int T, U, Np;
+    int int_writes, ext_writes;
+    int target_free, lru_max;
+};
+%extend greedylru {
+    greedylru(int T, int U, int Np) {
+        return greedylru_new(T, U, Np);
     }
-    ~lru_pool() {
-        lru_pool_del(self);
+    ~greedylru() {
+        greedylru_del(self);
     }
 }
 
