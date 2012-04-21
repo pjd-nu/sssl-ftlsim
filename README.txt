@@ -125,5 +125,9 @@ ftl.run() with Python code.
   ftl.write(lba) - perform a write
 
 Files:
-
+  setup.py - Python build script
+  ftlsim.i, ftlsim.c, ftlsim.h
+  getaddr.c, getaddr.c, getaddr.h
+  lambertw.i, lambertw.c
+  genaddr.py
 
