@@ -7,10 +7,39 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
+//#include <assert.h>
 #include <Python.h>
 
 #include "ftlsim.h"
+
+#define assert(x) {if (!(x)) *(char*)0 = 0;}
+
+static void list_add(struct segment *b, struct segment *list)
+{
+    b->next = list;
+    b->prev = list->prev;
+    list->prev->next = b;
+    list->prev = b;
+}
+
+static void list_rm(struct segment *b)
+{
+    b->prev->next = b->next;
+    b->next->prev = b->prev;
+    b->next = b->prev = b;
+}
+
+static int list_empty(struct segment *b)
+{
+    return b->next == b;
+}
+
+static struct segment *list_pop(struct segment *list)
+{
+    struct segment *b = list->next;
+    list_rm(b);
+    return b;
+}
 
 struct segment *segment_new(int Np)
 {
@@ -47,8 +76,24 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
     assert(page < self->Np && page >= 0 && self->lba[page] == lba);
     self->lba[page] = -1;
     self->n_valid--;
-    if (self->pool)
+    if (self->pool && self->in_pool) {
         self->pool->pages_valid--;
+        self->pool->pages_invalid++;
+
+        if (self->pool->bins) {
+            list_rm(self);
+            list_add(self, &self->pool->bins[self->n_valid]);
+            if (self->n_valid < self->pool->min_valid)
+                self->pool->min_valid = self->n_valid;
+        }
+        
+        /* minor inaccuracy here - we don't count over-writes while
+         * still on the write frontier. 
+         */
+        for (; self->pool->last_write < self->pool->ftl->write_seq; self->pool->last_write++)
+            self->pool->rate *= ewma_rate;
+        self->pool->rate += (1-ewma_rate);
+    }
 }
 
 struct ftl *ftl_new(int T, int Np)
@@ -91,6 +136,7 @@ struct segment *do_get_blk(struct ftl *self)
 
 static void check_new_segment(struct ftl *ftl, struct pool *pool)
 {
+    assert(pool->i <= pool->Np);
     if (pool->i >= pool->Np) {
         struct segment *b = do_get_blk(ftl);
         pool->addseg(pool, b);
@@ -104,31 +150,44 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
         int lba = addrs->getaddr(addrs);
         if (lba == -1)
             return;
+        assert(lba >= 0 && lba < ftl->T * ftl->Np);
         struct pool *pool = ftl->get_input_pool(ftl, lba);
         if (pool == NULL)
             return;
         ftl->ext_writes++;
         ftl->write_seq++;
-        for (; pool->last_write < ftl->write_seq; pool->last_write++)
-            pool->rate *= ewma_rate;
-        pool->rate += (1-ewma_rate);
-        
+
         pool->write(ftl, pool, lba);
         check_new_segment(ftl, pool);
-        
+
         while (ftl->nfree < ftl->minfree) {
             pool = ftl->get_pool_to_clean(ftl);
             struct segment *b = pool->getseg(pool);
             struct pool *next = pool->next_pool;
             if (pool == NULL)
                 return;
+
             for (j = 0; j < b->Np; j++)
                 if (b->lba[j] != -1) {
                     next->write(ftl, next, b->lba[j]);
-                    check_new_segment(ftl, pool);
+                    check_new_segment(ftl, next);
                 }
             do_put_blk(ftl, b);
         }
+
+#if 0 /* only works for LRU */
+        for (j = 0; j < ftl->npools; j++) {
+            int nv = 0, ni = 0;
+            struct segment *s;
+            for (s = ftl->pools[j]->frontier; s != NULL; s = s->next)
+                if (s->in_pool) {
+                    nv += s->n_valid;
+                    ni += (s->Np - s->n_valid);
+                }
+            assert(nv == ftl->pools[j]->pages_valid);
+            assert(ni == ftl->pools[j]->pages_invalid);
+        }
+#endif
     }
 }
 
@@ -137,14 +196,20 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
  */
 struct segment *lru_pool_getseg(struct pool *pool)
 {
-    assert(pool->tail != NULL);
+    assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
+    assert(pool->tail != NULL && pool->tail != pool->frontier);
     struct segment *val = pool->tail;
+    assert(val->in_pool);
+    assert(val->pool == pool);
+    
     pool->tail = val->prev;
-    pool->tail->next = NULL;
+    if (pool->tail != NULL)
+        pool->tail->next = NULL;
     val->in_pool = 0;
 
     pool->pages_valid -= val->n_valid;
     pool->pages_invalid -= (pool->Np - val->n_valid);
+    assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
 
     val->pool = NULL;
     
@@ -153,8 +218,8 @@ struct segment *lru_pool_getseg(struct pool *pool)
 
 double lru_tail_utilization(struct pool *pool)
 {
-    if (pool->tail == NULL)
-        return 0.0;
+    if (pool->tail == NULL || pool->tail == pool->frontier)
+        return 1.0;
     return (double)pool->tail->n_valid / (double)pool->tail->Np;
 }
 
@@ -163,8 +228,10 @@ double lru_tail_utilization(struct pool *pool)
  */
 void lru_pool_addseg(struct pool *pool, struct segment *fb)
 {
-    assert(pool->i == pool->Np);
-    assert(fb->n_valid == 0 && fb->in_pool == 0);
+    assert(pool->frontier == NULL || pool->i == pool->Np);
+    assert(fb->in_pool == 0);
+
+    fb->pool = pool;
 
     pool->i = 0;                /* page pointer for new block */
 
@@ -175,13 +242,13 @@ void lru_pool_addseg(struct pool *pool, struct segment *fb)
         pool->frontier->prev = fb;
         pool->pages_valid += pool->frontier->n_valid;
         pool->pages_invalid += (pool->Np - pool->frontier->n_valid);
+        assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
     }
     pool->frontier = fb;
 
     if (pool->tail == NULL)     /* handle initial case */
         pool->tail = fb;
     
-    fb->pool = pool;
 }
 
 void lru_pool_del(struct pool *pool)
@@ -193,12 +260,14 @@ double ewma_rate = 0.95;
 
 static void lru_int_write(struct ftl *ftl, struct pool *pool, int lba)
 {
+    assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
     ftl->int_writes++;
     struct segment *b = ftl->map[lba].block;
     int page = ftl->map[lba].page_num;
     if (b != NULL) 
         do_segment_overwrite(b, page, lba);
     do_segment_write(pool->frontier, pool->i++, lba);
+    assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
 }
 
 struct pool *lru_pool_new(struct ftl *ftl, int Np)
@@ -219,33 +288,6 @@ struct pool *lru_pool_new(struct ftl *ftl, int Np)
     val->tail_utilization = lru_tail_utilization;
     
     return val;
-}
-
-static void list_add(struct segment *b, struct segment *list)
-{
-    b->next = list;
-    b->prev = list->prev;
-    list->prev->next = b;
-    list->prev = b;
-}
-
-static void list_rm(struct segment *b)
-{
-    b->prev->next = b->next;
-    b->next->prev = b->prev;
-    b->next = b->prev = b;
-}
-
-static int list_empty(struct segment *b)
-{
-    return b->next == b;
-}
-
-static struct segment *list_pop(struct segment *list)
-{
-    struct segment *b = list->next;
-    list_rm(b);
-    return b;
 }
 
 static int greedy_tail_n_valid(struct pool *pool)
@@ -272,14 +314,15 @@ static struct segment *greedy_pool_getseg(struct pool *pool)
 
     pool->pages_valid -= b->n_valid;
     pool->pages_invalid -= (pool->Np - b->n_valid);
+    assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
     b->pool = NULL;
     return b;
 }
 
 static void greedy_pool_addseg(struct pool *pool, struct segment *fb)
 {
-    assert(pool->i == pool->Np);
-    assert(fb->n_valid == 0 && fb->in_pool == 0);
+    assert(pool->frontier == NULL || pool->i == pool->Np);
+    assert(fb->in_pool == 0);
 
     pool->i = 0;                /* page pointer for new block */
 
@@ -288,6 +331,7 @@ static void greedy_pool_addseg(struct pool *pool, struct segment *fb)
         pool->frontier->in_pool = 1; /* old frontier is now in pool */
         pool->pages_valid += pool->frontier->n_valid;
         pool->pages_invalid += (pool->Np - pool->frontier->n_valid);
+        assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
 
         list_add(blk, &pool->bins[blk->n_valid]);
         if (blk->n_valid < pool->min_valid)
@@ -305,12 +349,6 @@ static void greedy_int_write(struct ftl *ftl, struct pool *pool, int lba)
     int page = ftl->map[lba].page_num;
     if (b != NULL) {
         do_segment_overwrite(b, page, lba);
-        if (b->in_pool) {
-            list_rm(b);
-            list_add(b, &b->pool->bins[b->n_valid]);
-            if (b->n_valid < b->pool->min_valid)
-                b->pool->min_valid = b->n_valid;
-        }
     }
     
     do_segment_write(pool->frontier, pool->i++, lba);
