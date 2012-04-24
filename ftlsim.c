@@ -86,13 +86,6 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
             if (self->n_valid < self->pool->min_valid)
                 self->pool->min_valid = self->n_valid;
         }
-        
-        /* minor inaccuracy here - we don't count over-writes while
-         * still on the write frontier. 
-         */
-        for (; self->pool->last_write < self->pool->ftl->write_seq; self->pool->last_write++)
-            self->pool->rate *= ewma_rate;
-        self->pool->rate += (1-ewma_rate);
     }
 }
 
@@ -258,14 +251,22 @@ void lru_pool_del(struct pool *pool)
 }
 double ewma_rate = 0.95;
 
+/* this is identical to greedy_int_write - need to merge them
+ */
 static void lru_int_write(struct ftl *ftl, struct pool *pool, int lba)
 {
     assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
     ftl->int_writes++;
     struct segment *b = ftl->map[lba].block;
     int page = ftl->map[lba].page_num;
-    if (b != NULL) 
+    if (b != NULL) {
+        if (b->pool != NULL && b->pool != pool) {
+            for (; b->pool->last_write < b->pool->ftl->write_seq; b->pool->last_write++)
+                b->pool->rate *= ewma_rate;
+            b->pool->rate += (1-ewma_rate);
+        }
         do_segment_overwrite(b, page, lba);
+    }
     do_segment_write(pool->frontier, pool->i++, lba);
     assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
 }
@@ -348,6 +349,11 @@ static void greedy_int_write(struct ftl *ftl, struct pool *pool, int lba)
     struct segment *b = ftl->map[lba].block;
     int page = ftl->map[lba].page_num;
     if (b != NULL) {
+        if (b->pool != NULL && b->pool != pool) {
+            for (; b->pool->last_write < b->pool->ftl->write_seq; b->pool->last_write++)
+                b->pool->rate *= ewma_rate;
+            b->pool->rate += (1-ewma_rate);
+        }
         do_segment_overwrite(b, page, lba);
     }
     
@@ -391,7 +397,12 @@ static struct pool *do_select_first(struct ftl* ftl, int lba)
 
 static struct pool *do_select_top_down(struct ftl* ftl, int lba)
 {
-    return NULL;
+    int i;
+    struct segment *seg = ftl->map[lba].block;
+    for (i = 1; i < ftl->npools; i++)
+        if (seg && seg->pool == ftl->pools[i])
+            return ftl->pools[i-1];
+    return ftl->pools[0];
 }
 
 struct pool *pool_retval;
