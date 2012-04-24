@@ -88,6 +88,7 @@ struct pool {
     double rate;
     struct segment *bins; /* for greedy - [i] has 'i' valid pages */
     int min_valid;
+    struct segment *(*next_segment)(struct pool *pool, struct segment *s);
 };
 
 extern double ewma_rate;

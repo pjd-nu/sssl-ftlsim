@@ -271,6 +271,13 @@ static void lru_int_write(struct ftl *ftl, struct pool *pool, int lba)
     assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
 }
 
+struct segment *lru_next_seg(struct pool *pool, struct segment *prev)
+{
+    if (prev == NULL)
+        prev = pool->frontier;
+    return prev->next;
+}
+
 struct pool *lru_pool_new(struct ftl *ftl, int Np)
 {
     struct pool *val = calloc(sizeof(*val), 1);
@@ -287,6 +294,7 @@ struct pool *lru_pool_new(struct ftl *ftl, int Np)
     val->write = lru_int_write;
     val->del = lru_pool_del;
     val->tail_utilization = lru_tail_utilization;
+    val->next_segment = lru_next_seg;
     
     return val;
 }
@@ -367,6 +375,23 @@ static void greedy_pool_del(struct pool *pool)
     free(pool);
 }
 
+struct segment *greedy_next_seg(struct pool *pool, struct segment *prev)
+{
+    if (prev == NULL)
+        prev = &pool->bins[0];
+    if (prev->next == &pool->bins[pool->Np])
+        return NULL;
+    if (prev->lba == NULL) {    /* it's a bin */
+        if (list_empty(prev))
+            return greedy_next_seg(pool, prev+1);
+        else
+            return prev->next;
+    }
+    if (prev->next->lba == NULL)
+        return greedy_next_seg(pool, prev->next+1);
+    return prev->next;
+}
+
 struct pool *greedy_pool_new(struct ftl *ftl, int Np)
 {
     struct pool *pool = calloc(sizeof(*pool), 1);
@@ -386,6 +411,7 @@ struct pool *greedy_pool_new(struct ftl *ftl, int Np)
     pool->write = greedy_int_write;
     pool->del = greedy_pool_del;
     pool->tail_utilization = greedy_tail_utilization;
+    pool->next_segment = greedy_next_seg;
     
     return pool;
 }
