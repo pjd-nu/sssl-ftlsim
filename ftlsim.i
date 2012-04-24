@@ -104,6 +104,9 @@ struct pool {
             return greedy_pool_new(ftl, Np);
         return NULL;
     }
+    struct segment *next_segment(struct segment *s) {
+        return self->next_segment(self, s);
+    }
     void add_segment(struct segment *blk) {
         self->addseg(self, blk);
     }
