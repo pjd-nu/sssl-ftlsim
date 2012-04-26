@@ -76,7 +76,7 @@ struct pool {
     struct ftl *ftl;
     struct segment *frontier, *tail;
     int Np, int_writes, ext_writes, i;
-    int pages_valid, pages_invalid;
+    int pages_valid, pages_invalid, length;
     void (*addseg)(struct pool *self, struct segment *blk);
     struct segment * (*getseg)(struct pool *self);
     void (*write)(struct ftl*, struct pool*, int);
@@ -89,8 +89,11 @@ struct pool {
     struct segment *bins; /* for greedy - [i] has 'i' valid pages */
     int min_valid;
     struct segment *(*next_segment)(struct pool *pool, struct segment *s);
+    struct segment *(*tail_segment)(struct pool *pool);
 };
 
 extern double ewma_rate;
 struct pool *lru_pool_new(struct ftl *, int Np);
 struct pool *greedy_pool_new(struct ftl *, int Np);
+
+extern int err_occurred;

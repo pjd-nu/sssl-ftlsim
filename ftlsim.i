@@ -10,6 +10,8 @@
 %{
 #define SWIG_FILE_WITH_INIT
 #include "ftlsim.h"
+#undef assert
+#define assert(x) {if (!(x)) *(char*)0 = 0;}
 %}
 
 struct int_array {          /* kludge for indexed arrays */
@@ -63,41 +65,56 @@ struct ftl {
 
 %extend ftl {
     ftl(int T, int Np) {
+        err_occurred = 0;
         return ftl_new(T, Np);
     }
     void put_blk(struct segment *blk) {
+        err_occurred = 0;
         do_put_blk(self, blk);
     }
     struct segment *get_blk(void) {
+        err_occurred = 0;
         return do_get_blk(self);
     }
     struct segment *find_blk(int lba) {
+        err_occurred = 0;
         assert(lba >= 0 && lba < self->T * self->Np);
         return self->map[lba].block;
     }
     int find_page(int lba) {
+        err_occurred = 0;
         assert(lba >= 0 && lba < self->T * self->Np);
         return self->map[lba].page_num;
     }
     struct pool *frontier(int lba) {
+        err_occurred = 0;
         return self->get_input_pool(self, lba);
     }
     void run(struct getaddr *addrs, int count) {
+        err_occurred = 0;
         do_ftl_run(self, addrs, count);
     }
     ~ftl() {
+        err_occurred = 0;
         ftl_del(self);
     }
 }
 
+%exception {
+    $action
+    if (err_occurred)
+        return NULL;
+}
+
 struct pool {
     struct segment *frontier;
-    int i, pages_valid, pages_invalid;
+    int i, pages_valid, pages_invalid, length;
     struct pool *next_pool;
     double rate;
 };
 %extend pool {
     pool(struct ftl *ftl, char *type, int Np) {
+        err_occurred = 0;
         if (!strcmp(type, "lru"))
             return lru_pool_new(ftl, Np);
         if (!strcmp(type, "greedy"))
@@ -105,21 +122,31 @@ struct pool {
         return NULL;
     }
     struct segment *next_segment(struct segment *s) {
+        err_occurred = 0;
         return self->next_segment(self, s);
     }
     void add_segment(struct segment *blk) {
+        err_occurred = 0;
         self->addseg(self, blk);
     }
     struct segment *remove_segment(void) {
+        err_occurred = 0;
         return self->getseg(self);
     }
+    struct segment *tail_segment(void) {
+        err_occurred = 0;
+        return self->tail_segment(self);
+    }
     double tail_util(void) {
+        err_occurred = 0;
         return self->tail_utilization(self);
     }
     void write(int lba) {
+        err_occurred = 0;
         self->write(self->ftl, self, lba);
     }
     ~pool() {
+        err_occurred = 0;
         self->del(self);
     }
 }

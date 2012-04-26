@@ -14,6 +14,10 @@
 
 #define assert(x) {if (!(x)) *(char*)0 = 0;}
 
+#include <setjmp.h>
+jmp_buf bailout_buf;
+int err_occurred;
+
 static void list_add(struct segment *b, struct segment *list)
 {
     b->next = list;
@@ -139,14 +143,22 @@ static void check_new_segment(struct ftl *ftl, struct pool *pool)
 void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
 {
     int i, j;
+    if (setjmp(bailout_buf) != 0) {
+        err_occurred = 1;
+        return;
+    }
     for (i = 0; i < count; i++) {
         int lba = addrs->getaddr(addrs);
         if (lba == -1)
             return;
         assert(lba >= 0 && lba < ftl->T * ftl->Np);
-        struct pool *pool = ftl->get_input_pool(ftl, lba);
-        if (pool == NULL)
-            return;
+        struct pool *pool = NULL;
+        if (ftl->get_input_pool)
+            pool = ftl->get_input_pool(ftl, lba);
+        if (pool == NULL) {
+            PyErr_SetString(PyExc_RuntimeError, "ftl: input_pool error");
+            longjmp(bailout_buf, 1);
+        }
         ftl->ext_writes++;
         ftl->write_seq++;
 
@@ -156,9 +168,15 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
         while (ftl->nfree < ftl->minfree) {
             pool = ftl->get_pool_to_clean(ftl);
             struct segment *b = pool->getseg(pool);
+            if (b == NULL) {
+                PyErr_SetString(PyExc_RuntimeError, "ftl: segment cleaning error");
+                longjmp(bailout_buf, 1);
+            }
             struct pool *next = pool->next_pool;
-            if (pool == NULL)
-                return;
+            if (pool == NULL) {
+                PyErr_SetString(PyExc_RuntimeError, "ftl: pool.next_pool = None");
+                longjmp(bailout_buf, 1);
+            }
 
             for (j = 0; j < b->Np; j++)
                 if (b->lba[j] != -1) {
@@ -167,20 +185,6 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
                 }
             do_put_blk(ftl, b);
         }
-
-#if 0 /* only works for LRU */
-        for (j = 0; j < ftl->npools; j++) {
-            int nv = 0, ni = 0;
-            struct segment *s;
-            for (s = ftl->pools[j]->frontier; s != NULL; s = s->next)
-                if (s->in_pool) {
-                    nv += s->n_valid;
-                    ni += (s->Np - s->n_valid);
-                }
-            assert(nv == ftl->pools[j]->pages_valid);
-            assert(ni == ftl->pools[j]->pages_invalid);
-        }
-#endif
     }
 }
 
@@ -205,6 +209,8 @@ struct segment *lru_pool_getseg(struct pool *pool)
     assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
 
     val->pool = NULL;
+    pool->length--;
+    assert(pool->length >= 0);
     
     return val;
 }
@@ -216,6 +222,13 @@ double lru_tail_utilization(struct pool *pool)
     return (double)pool->tail->n_valid / (double)pool->tail->Np;
 }
 
+struct segment *lru_tail_seg(struct pool *pool)
+{
+    if (pool->tail == NULL || pool->tail == pool->frontier)
+        return NULL;
+    return pool->tail;
+}
+    
 /* After the current write frontier fills, call this function to move
  * it to the pool and provide a new write frontier.
  */
@@ -224,6 +237,7 @@ void lru_pool_addseg(struct pool *pool, struct segment *fb)
     assert(pool->frontier == NULL || pool->i == pool->Np);
     assert(fb->in_pool == 0);
 
+    pool->length++;
     fb->pool = pool;
 
     pool->i = 0;                /* page pointer for new block */
@@ -295,6 +309,7 @@ struct pool *lru_pool_new(struct ftl *ftl, int Np)
     val->del = lru_pool_del;
     val->tail_utilization = lru_tail_utilization;
     val->next_segment = lru_next_seg;
+    val->tail_segment = lru_tail_seg;
     
     return val;
 }
@@ -314,6 +329,15 @@ static double greedy_tail_utilization(struct pool *pool)
     return (double)greedy_tail_n_valid(pool) / (double)pool->Np;
 }
 
+static struct segment *greedy_tail_segment(struct pool *pool)
+{
+    int i = greedy_tail_n_valid(pool);
+    if (i > pool->Np)
+        return NULL;
+    else
+        return pool->bins[i].next;
+}
+
 static struct segment *greedy_pool_getseg(struct pool *pool)
 {
     int i = greedy_tail_n_valid(pool);
@@ -325,6 +349,10 @@ static struct segment *greedy_pool_getseg(struct pool *pool)
     pool->pages_invalid -= (pool->Np - b->n_valid);
     assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
     b->pool = NULL;
+
+    pool->length--;
+    assert(pool->length >= 0);
+
     return b;
 }
 
@@ -332,6 +360,8 @@ static void greedy_pool_addseg(struct pool *pool, struct segment *fb)
 {
     assert(pool->frontier == NULL || pool->i == pool->Np);
     assert(fb->in_pool == 0);
+
+    pool->length++;
 
     pool->i = 0;                /* page pointer for new block */
 
@@ -412,6 +442,7 @@ struct pool *greedy_pool_new(struct ftl *ftl, int Np)
     pool->del = greedy_pool_del;
     pool->tail_utilization = greedy_tail_utilization;
     pool->next_segment = greedy_next_seg;
+    pool->tail_segment = greedy_tail_segment;
     
     return pool;
 }
@@ -441,8 +472,8 @@ static struct pool *python_select_1_arg(struct ftl *ftl, int lba)
 {
     PyObject *args = Py_BuildValue("(i)", lba);
     PyObject *result = PyEval_CallObject(ftl->get_input_pool_arg, args);
-    if (PyErr_Occurred()) 
-        PyErr_Print();
+    if (PyErr_Occurred())
+        longjmp(bailout_buf, 1);
     if (result != NULL) {
         Py_DECREF(result);
     }
@@ -465,7 +496,7 @@ static struct pool *python_select_no_arg(struct ftl *ftl)
     PyObject *args = Py_BuildValue("()");
     PyObject *result = PyEval_CallObject(ftl->get_pool_to_clean_arg, args);
     if (PyErr_Occurred()) 
-        PyErr_Print();
+        longjmp(bailout_buf, 1);
     if (result != NULL) {
         Py_DECREF(result);
     }
