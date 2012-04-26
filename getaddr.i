@@ -60,15 +60,21 @@ struct getaddr {
 struct mixed {
     struct getaddr handle;
 };
+void mixed_do_add(struct mixed *self, struct getaddr *g, double p, int base);
 %extend mixed {
-    mixed(void) {
+    mixed() {
+        return mixed_new();
+    }
+    %insert("python") %{
+        def add(self, src, p, base):
+            src.thisown = False
+            mixed_do_add(self, src, p, base);
+    %}
+    struct mixed *alloc(void) {
         return mixed_new();
     }
     ~mixed() {
         mixed_del(self);
-    }
-    void add(struct getaddr *g, double p, int base) {
-        mixed_do_add(self, g, p, base);
     }
 }
 

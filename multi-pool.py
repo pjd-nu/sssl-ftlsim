@@ -2,49 +2,79 @@
 #
 import getaddr
 import ftlsim
+import sys
 
 # parameters
 #
-U = 2302
+U = 23020
 Np = 128
-S_f = 0.1
-alpha = 1 / (1-S_f)
+#S_f = 0.1
+#alpha = 1 / (1-S_f)
+alpha = 1.1
 minfree = Np
-T = int(U * alpha) + minfree
+minfree = 3
+T = int(U * alpha) 
 
 # FTL with default parameters for single pool
 #
 ftl = ftlsim.ftl(T, Np)
 ftl.minfree = minfree
 ftl.get_input_pool = ftlsim.cvar.write_select_first
-#ftl.get_input_pool = ftlsim.cvar.write_select_first
 ftl.get_pool_to_clean = ftlsim.cvar.clean_select_python
 
 # Greedy-managed pool
 #
 pool1 = ftlsim.pool(ftl, "lru", Np)
 pool2 = ftlsim.pool(ftl, "lru", Np)
-pool3 = ftlsim.pool(ftl, "greedy", Np)
 pool1.next_pool = pool2
-pool2.next_pool = pool3
-pool3.next_pool = pool3
+pool2.next_pool = pool2
 
-x = True
 def clean_select():
     global pool1, pool2, pool3
-    pools = filter(lambda x: x.pages_invalid >= 2*Np, (pool1, pool2, pool3))
+    #pools = ((1.0, pool1), (1.0, pool2), (4.0, pool3))
+    pools = ((1.0, pool1), (1.0, pool2))
+    pools = filter(lambda x: x[1].pages_invalid >= 2*Np, pools)
     pool = max(pools, key=lambda x:
-                   float(x.pages_invalid)/(x.pages_valid+x.pages_invalid))
+                   x[0]*float(x[1].pages_invalid)/(x[1].pages_valid+x[1].pages_invalid))
+    ftlsim.return_pool(pool[1])
+
+def clean_select2():
+    global pool1, pool2, pool3
+    pools = filter(lambda x: x.pages_invalid >= 2*Np, (pool1, pool2, pool3))
+    pool = max(pools, key=lambda x: x.length)
     ftlsim.return_pool(pool)
 
-ftl.get_pool_to_clean_arg = clean_select
+def printit(pool):
+    global pool1, pool2
+    n = 1 if pool == pool1 else 2
+    hot,cold,inv = (0,0,0)
+    seg = pool.tail_segment()
+    for i in range(Np):
+        lba = seg.lbas[i].val
+        if lba == -1:
+            inv += 1
+        elif lba < U_h:
+            hot += 1
+        else:
+            cold += 1
+    print n, hot, cold
+
+doprint = False
+def clean_select3():
+    global pool1, pool2, pool3, doprint
+    pool = pool1 if pool1.length > 0.1*T else pool2
+    ftlsim.return_pool(pool)
+    
+ftl.get_pool_to_clean_arg = clean_select3
 
 # Allocate segments...
 #
-freelist = [ftlsim.segment(Np) for i in range(T+Np)]
+freelist = [ftlsim.segment(Np) for i in range(T+minfree)]
 for b in freelist:
     b.thisown = False
-for pool in (pool1, pool2, pool3):
+
+#for pool in (pool1, pool2, pool3):
+for pool in (pool1, pool2):
     pool.add_segment(freelist.pop())
 for b in freelist:
     ftl.put_blk(b)
@@ -68,32 +98,58 @@ src_h.thisown = False
 src_c = getaddr.uniform(U_c)
 src_c.thisown = False
 src = getaddr.mixed()
-src.add(src_h.handle, r, 0) 
+src.add(src_h.handle, r, 0)
 src.add(src_c.handle, 1.0, U_h)
 
-def showpool(pool):
-    hot = 0; cold = 0
+src_u = getaddr.uniform(U*Np)
+
+def poolutil(pool):
+    ns = [0 for i in range(Np+1)]
+    seg = pool.next_segment(None)
+    while seg != None:
+        ns[seg.n_valid] += 1
+        seg = pool.next_segment(seg)
+    for i in range(Np+1):
+        if ns[i] > 0:
+            print i, ns[i]
+
+def poolinfo(pool):
     seg = pool.next_segment(None)
     while seg != None:
         for j in range(Np):
             lba = seg.lbas[j].val
-            if lba > -1:
-                if lba < U_h:
-                    hot += 1
-                else:
-                    cold += 1
+            if lba == -1:
+                inv += 1
+            elif lba < U_h:
+                hot += 1
+            else:
+                cold += 1
         seg = pool.next_segment(seg)
-    print "%d %d %.3f" % (hot, cold, float(hot)/(hot+cold+1))
+    return (hot,cold,inv)
 
 ftl.ext_writes = 0
 ftl.int_writes = 0
 sum_e = 0
 sum_i = 0
+ftl.run(src.handle, U*Np)
+ftl.ext_writes = 0
+ftl.int_writes = 0
+
+#doprint = True
 for i in range(30):
-    ftl.run(src.handle, U*Np/10)
+    ftl.run(src.handle, U*Np/5)
     print ftl.ext_writes, ftl.int_writes, (1.0*ftl.int_writes)/ftl.ext_writes
-    for pool in (pool1, pool2, pool3):
-        showpool(pool)
+    #print " ", pool1.pages_valid, pool1.pages_invalid, pool2.pages_valid, pool2.pages_invalid
+    #poolutil(pool2)
+    #h1,c1,i1 = poolinfo(pool1)
+    #h2,c2,i2 = poolinfo(pool2)
+    #h3 = U_h - h1 - h2
+    #c3 = U_c - c1 - c2
+    #i3 = Np*(T - U) - i1 - i2
+    # for pair in ((h1,c1,i1), (h2,c2,i2)): #, (h3,c3,i3)):
+    #     h,c,ii = pair
+    #     print "%d %d %d %.3f" % (h, c, ii, float(h)/(1+h+c))
+
     sum_e += ftl.ext_writes
     sum_i += ftl.int_writes
     ftl.ext_writes = 0
