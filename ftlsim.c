@@ -194,7 +194,10 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
 struct segment *lru_pool_getseg(struct pool *pool)
 {
     assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
-    assert(pool->tail != NULL && pool->tail != pool->frontier);
+    if (pool->tail == NULL || pool->tail == pool->frontier) {
+        PyErr_SetString(PyExc_RuntimeError, "ftl: lru.get_seg: empty");
+        longjmp(bailout_buf, 1);
+    }
     struct segment *val = pool->tail;
     assert(val->in_pool);
     assert(val->pool == pool);
@@ -341,7 +344,10 @@ static struct segment *greedy_tail_segment(struct pool *pool)
 static struct segment *greedy_pool_getseg(struct pool *pool)
 {
     int i = greedy_tail_n_valid(pool);
-    assert(i < pool->Np);
+    if (i == pool->Np) {
+        PyErr_SetString(PyExc_RuntimeError, "ftl: greedy: pool full");
+        longjmp(bailout_buf, 1);
+    }
     struct segment *b = list_pop(&pool->bins[i]);
     b->in_pool = 0;
 
