@@ -14,19 +14,8 @@
 #define assert(x) {if (!(x)) *(char*)0 = 0;}
 %}
 
-struct int_array {          /* kludge for indexed arrays */
-    int val;
-};
-
-%extend int_array {
-    struct int_array *__getitem__(int i) {
-        return self + i;
-    }
- }
-
 struct segment {
     int  n_valid;
-    struct int_array *lbas;
 };
 
 %extend segment {
@@ -41,6 +30,9 @@ struct segment {
     }
     void overwrite(int page, int lba) {
         do_segment_overwrite(self, page, lba);
+    }
+    int page(int _page) {
+        return self->lba[_page];
     }
 }
     
@@ -66,7 +58,10 @@ struct ftl {
 %extend ftl {
     ftl(int T, int Np) {
         err_occurred = 0;
-        return ftl_new(T, Np);
+        struct ftl *_f = ftl_new(T, Np);
+        _f->get_input_pool = write_select_first;
+        _f->get_pool_to_clean = clean_select_first;
+        return _f;
     }
     void put_blk(struct segment *blk) {
         err_occurred = 0;
@@ -115,11 +110,14 @@ struct pool {
 %extend pool {
     pool(struct ftl *ftl, char *type, int Np) {
         err_occurred = 0;
+        struct pool *p = NULL;
         if (!strcmp(type, "lru"))
-            return lru_pool_new(ftl, Np);
+            p = lru_pool_new(ftl, Np);
         if (!strcmp(type, "greedy"))
-            return greedy_pool_new(ftl, Np);
-        return NULL;
+            p = greedy_pool_new(ftl, Np);
+        if (p != NULL)
+            p->next_pool = p;
+        return p;
     }
     struct segment *next_segment(struct segment *s) {
         err_occurred = 0;

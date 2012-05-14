@@ -1,7 +1,9 @@
 
        SSSL-ftlsim -- a fast Flash Translation Layer simulator
 
-		   Peter Desnoyers pjd@ccs.neu.edu
+		   Peter Desnoyers, pjd@ccs.neu.edu
+		      Solid-State Storage Lab
+		Northeastern University Computer Science
 
 SSSL-ftlsim is a set of Python extensions, implemented in C using the
 SWIG interface generator, for generating traffic distributions
@@ -41,6 +43,9 @@ invariants:
       base_(i+1) - base_i = gen_i.max - ranges are independent
       p_n                             - total probability = 1
 
+Remember to set gen_i.thisown = 0 so that Python doesn't garbage
+collect the object after it goes out of scope.
+
 3. getaddr.trace(file)
 
 File contains lines of the form '<addr> <len>'. For each pair 'A N'
@@ -57,30 +62,33 @@ genaddr.py - python version of traffic generator
 
 lambertw - the Lambert W function, for calculating optimal cleaning
 
-ftlsim - FTL simulator, with the following types:
+ftlsim - FTL simulator, consisting of the FTL itself (basically the
+reverse LBA-to-physical block map and a freelist), segments, and one
+or more independently garbage-collected "pools". Types are:
 
 segment: a physical flash block
   ftlsim.segment(Np) - constructor
   segment.n_valid - number of valid pages in block
-  segment.lbas[].val - array [0..Np-1] of LBAs (-1 for invalid pages)
+  segment.page(i) - accesses array [0..Np-1] of LBAs (-1 = invalid)
 
 ftl: FTL instance. It holds a single reverse map [lba to segment,page], 
      and a set of pools, each of which has a write frontier plus
      additional blocks
 
-  ftlsim.ftl(T, Np) - creates a new FTL instance with a reverse map for
-       	     T total segments, with segment size Np.
-	     (whoops - should be 'U', I think?)
+  ftlsim.ftl(U, Np) - creates a new FTL instance with a reverse map for
+       	     U total segments, with segment size Np.
 
   ftl.int_writes, .ext_writes - internal and external write count
   ftl.nfree, .minfree - current number of free segments, target minimum #
   ftl.get_input_pool - which pool to write to. possible values are:
-  		  write_select_first
+  		  write_select_first (*default)
 		  write_select_top_down
 		  write_select_python - evaluates 'get_input_pool_arg'
   ftl.get_pool_to_clean - which one to clean a segment from. Values:
-  		  clean_select_first
+  		  clean_select_first (*default)
 		  clean_select_python - evaluates 'get_pool_to_clean_arg'
+
+  Note that the default behavior is what you want for naive cleaning.
 
 return_pool():
   Due to SWIG limitations, Python callbacks 'get_input_pool_arg' and
@@ -93,7 +101,9 @@ return_pool():
 	  	    ftl.put_blk() before running the simulation. 
 
   ftl.run(addrgen, count) - run using addresses from 'addrgen' for 'count'
-  	     	      iterations 
+  	     	   iterations. If there are free blocks from
+  	     	   ftl.put_blk() it will use them; otherwise cleaning
+  	     	   is parameterized above.
 
 Only needed for replacing ftl.run():
   ftl.find_blk(lba) - returns segment object for physical block holding 'lba'
@@ -131,7 +141,20 @@ Files:
   lambertw.i, lambertw.c
   genaddr.py
 
+Installation:
+  CFLAGS=-O3 python setup.py build
+     and then either:
+  python setup.py install
+     or
+  mv build/lib*/* .
+
 Example files:
   low-level.py - direct Python implementation of cleaning, etc.
   greedy-high.py, lru-high.py - full-speed versions of naive Greedy
   		  	        and LRU cleaning
+
+  2hc.py - naive LRU cleaning with hot/cold data model
+  3hc.py - naive LRU with 3-part data model
+
+Error handling still isn't the best, and you may end up needing to use
+GDB to figure out where your Python script went wrong.
