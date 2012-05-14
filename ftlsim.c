@@ -54,7 +54,6 @@ struct segment *segment_new(int Np)
     fb->lba = calloc(Np * sizeof(int), 1);
     for (i = 0; i < Np; i++)
         fb->lba[i] = -1;
-    fb->lbas = (void*)fb->lba;
 
     return fb;
 }
@@ -62,7 +61,6 @@ struct segment *segment_new(int Np)
 void segment_del(struct segment *fb)
 {
     fb->magic = 0;
-    free(fb->lbas);
     free(fb);
 }
 

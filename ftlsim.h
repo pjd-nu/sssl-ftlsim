@@ -16,7 +16,6 @@ struct segment {
     struct segment *next, *prev;
     int  Np;
     int *lba;            /* lba[0..Np-1] = LBA / -1 */
-    struct int_array *lbas;     /* alias for python indexed access */
     int  in_pool;        /* false if we're still the write frontier */
     int  n_valid;
     struct pool *pool;
