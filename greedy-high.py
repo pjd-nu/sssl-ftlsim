@@ -11,7 +11,7 @@ import ftlsim
 #
 U = 23020
 Np = 128
-S_f = 0.1
+S_f = 0.07
 alpha = 1 / (1-S_f)
 minfree = Np
 T = int(U * alpha) + minfree

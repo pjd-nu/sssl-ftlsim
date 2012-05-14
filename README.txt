@@ -5,6 +5,8 @@
 		      Solid-State Storage Lab
 		Northeastern University Computer Science
 
+Version 0.1, May 14 2012
+
 SSSL-ftlsim is a set of Python extensions, implemented in C using the
 SWIG interface generator, for generating traffic distributions
 (getaddr) and running Flash Translation Layer simulations (runsim). 
@@ -155,6 +157,8 @@ Example files:
 
   2hc.py - naive LRU cleaning with hot/cold data model
   3hc.py - naive LRU with 3-part data model
+
+  two-pool.py - hot/cold data separation with global greedy cleaning
 
 Error handling still isn't the best, and you may end up needing to use
 GDB to figure out where your Python script went wrong.

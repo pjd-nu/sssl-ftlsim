@@ -11,7 +11,17 @@
 #define SWIG_FILE_WITH_INIT
 #include "ftlsim.h"
 #include "runsim.h"
+
+struct pyobj {
+  PyObject *obj;
+};
+extern struct pyobj foo_obj;
 %}
+
+struct pyobj {
+  PyObject *obj;
+};
+struct pyobj foo_obj;
 
 struct runsim {
     struct getaddr *generator;
@@ -19,6 +29,7 @@ struct runsim {
     PyObject *stats_enter;      /* blocks entering pool */
     PyObject *stats_write;      /* every write */
 };
+
 %extend runsim {
     void run(int steps) {
         struct getaddr *gen = self->generator;
