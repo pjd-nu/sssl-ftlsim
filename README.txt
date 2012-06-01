@@ -128,6 +128,10 @@ ftlsim.pool: a write frontier and associated pool of segments
 		 the first segment; after that it should be handled
 		 within run()
 
+  pool.insert_segment(segment) - move a segment containing valid and invalid
+                 pages to a pool, bypassing the write process. Used for
+                 windowed greedy algorithm.
+
 Note that the following two are only used if you're replacing
 ftl.run() with Python code.
 
@@ -154,6 +158,7 @@ Example files:
   low-level.py - direct Python implementation of cleaning, etc.
   greedy-high.py, lru-high.py - full-speed versions of naive Greedy
   		  	        and LRU cleaning
+  windowed-greedy.py - algorithm from Hu 2009
 
   2hc.py - naive LRU cleaning with hot/cold data model
   3hc.py - naive LRU with 3-part data model
