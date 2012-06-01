@@ -11,10 +11,11 @@ Np = 128
 #S_f = 0.1
 #alpha = 1 / (1-S_f)
 alpha = 1.1
-alpha = 1.07
-minfree = Np
+#alpha = 1.07
 minfree = 3
 T = int(U * alpha) 
+r = 0.8
+f = 0.3
 
 # FTL with default parameters for single pool
 #
@@ -32,7 +33,7 @@ pool2a = ftlsim.pool(ftl, "lru", Np)
 pool2b = ftlsim.pool(ftl, "lru", Np)
 pool2c = ftlsim.pool(ftl, "lru", Np)
 pool2d = ftlsim.pool(ftl, "lru", Np)
-pool3 = ftlsim.pool(ftl, "greedy", Np)
+pool3 = ftlsim.pool(ftl, "lru", Np)
 
 
 # Uu = dict()
@@ -41,8 +42,11 @@ pool3 = ftlsim.pool(ftl, "greedy", Np)
 #     Uu[p] = 0.0; Nn[p] = 0
 
 #pools = ((0.0997,pool1), (0,pool3))
-#pools = ((0.0935,pool1), (0.0683,pool2), (0,pool3))
+pools = ((0.25,pool1), (0.1,pool2), (0,pool3))
 
+pool1.name = 'pool1'
+pool2.name = 'pool2'
+pool3.name = 'pool3'
 
 # pools = ((0.0736,pool1), (0.0412,pool2), (0,pool3)) # for 0.9/0.05
 # pools = ((0.1128,pool1), (0.0864,pool2), (0,pool3)) # 80/20
@@ -54,8 +58,8 @@ pool3 = ftlsim.pool(ftl, "greedy", Np)
 # #pools = ((0.0849,pool1), (0.0548,pool2), (0.0415,pool2a), (0.0408,pool2b), (0.0563,pool2c), (0,pool3))
 # #pools = ((0.0850,pool1), (0.0546,pool2), (0.0415,pool2a), (0.0406,pool2b), (0.0559,pool2c), (0.0780,pool2d), (0,pool3))
 # lens = (0.1090, 0.0802, 0.0620, 0.0512, 0.0464, 0.0468, 0)
-lens = (0.0643, 0.0399, 0.0266, 0.0200, 0.0184, 0.0236, 0)
-pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool2d, pool3))
+#lens = (0.0643, 0.0399, 0.0266, 0.0200, 0.0184, 0.0236, 0)
+#pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool2d, pool3))
 
 # lens = (0.1089, 0.0811, 0.0634, 0.0533, 0.0494, 0)
 # pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool3))
@@ -153,10 +157,6 @@ print "ready..."
 
 # Now run with uniform random traffic for 10 units of 0.1 volume each.
 #
-r = 0.8
-f = 0.2
-r = 0.9
-f = 0.1
 U_h = int(f*U*Np)
 U_c = U*Np - U_h
 
@@ -214,15 +214,18 @@ ftl.ext_writes = 0
 ftl.int_writes = 0
 sum_e = 0
 sum_i = 0
-ftl.run(src.handle, U*Np*5/3)
+ftl.run(src.handle, U*Np*1/3)
 ftl.ext_writes = 0
 ftl.int_writes = 0
+print "r2"
 
 #doprint = True
 for i in range(30):
-    ftl.run(src.handle, U*Np/5)
+    ftl.run(src.handle, U*Np/10)
     print ftl.ext_writes, ftl.int_writes, (1.0*ftl.int_writes)/ftl.ext_writes
-    #print " ", float(pool3.pages_valid + pool3.pages_invalid) / pool3.pages_valid #, pool2.pages_valid, pool2.pages_invalid
+    print " ", pool1.pages_valid, pool1.pages_invalid
+    print " ", pool2.pages_valid, pool2.pages_invalid
+    print " ", pool3.pages_valid, pool3.pages_invalid
     #if Nn[pool3] > 0:
     #print Uu[pool3] / Nn[pool3]
     #Uu[pool3] = 0.0; Nn[pool3] = 0
