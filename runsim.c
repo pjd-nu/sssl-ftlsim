@@ -54,3 +54,7 @@ void runsim_stats_write(struct runsim *sim, int addr, int blk, int pg)
     write_depth--;
 }
 
+struct pyobj {
+  PyObject *obj;
+};
+struct pyobj foo_obj;

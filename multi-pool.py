@@ -8,10 +8,8 @@ import sys
 #
 U = 23020
 Np = 128
-#S_f = 0.1
 #alpha = 1 / (1-S_f)
 alpha = 1.1
-#alpha = 1.07
 minfree = 3
 T = int(U * alpha) 
 r = 0.8
@@ -60,6 +58,12 @@ pool3.name = 'pool3'
 # lens = (0.1090, 0.0802, 0.0620, 0.0512, 0.0464, 0.0468, 0)
 #lens = (0.0643, 0.0399, 0.0266, 0.0200, 0.0184, 0.0236, 0)
 #pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool2d, pool3))
+lens = (0.1090, 0.0802, 0.0620, 0.0512, 0.0464, 0.0468, 0)
+#lens = (0.0643, 0.0399, 0.0266, 0.0200, 0.0184, 0.0236, 0)
+pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool2d, pool3))
+
+#lens = (0.0643, 0.0399, 0.0266, 0.0200, 0.0184, 0.0236, 0)
+#pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool2d, pool3))
 
 # lens = (0.1089, 0.0811, 0.0634, 0.0533, 0.0494, 0)
 # pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool3))
@@ -88,12 +92,20 @@ for p,pool in pools:
     prev = pool
 pool3.next_pool = pool3
 
+util_sum = dict()
+util_n = dict()
+for p,pool in pools:
+    util_sum[pool] = 0.0
+    util_n[pool] = 0
+
 def clean_select():
     global pools
     for p,pool in pools:
         if pool.length > p*T:
             if doprint:
                 print pool.name, pool.tail_util()
+            util_sum[pool] += pool.tail_util()
+            util_n[pool] += 1
             #Uu[pool] += pool.tail_util()
             #Nn[pool] += 1
             ftlsim.return_pool(pool)
@@ -219,10 +231,13 @@ ftl.ext_writes = 0
 ftl.int_writes = 0
 print "r2"
 
+print "zz"
+
 #doprint = True
 for i in range(30):
     ftl.run(src.handle, U*Np/10)
     print ftl.ext_writes, ftl.int_writes, (1.0*ftl.int_writes)/ftl.ext_writes
+
     print " ", pool1.pages_valid, pool1.pages_invalid
     print " ", pool2.pages_valid, pool2.pages_invalid
     print " ", pool3.pages_valid, pool3.pages_invalid
@@ -238,6 +253,15 @@ for i in range(30):
     #for pair in ((h2,c2,i2),): #((h1,c1,i1), (h2,c2,i2)): #, 
     #h,c,ii = pair
     #print "%d %d %d %.3f" % (h, c, ii, float(h)/(1+h+c))
+
+    for p,pool in pools:
+        u = 0.0
+        if util_n[pool]:
+            u = util_sum[pool] / util_n[pool]
+        util_sum[pool] = 0.0
+        util_n[pool] = 0
+        print u,
+    print
 
     sum_e += ftl.ext_writes
     sum_i += ftl.int_writes

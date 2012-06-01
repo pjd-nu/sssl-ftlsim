@@ -127,6 +127,10 @@ struct pool {
         err_occurred = 0;
         self->addseg(self, blk);
     }
+    void insert_segment(struct segment *blk) {
+        err_occurred = 0;
+        self->insertseg(self, blk);
+    }
     struct segment *remove_segment(void) {
         err_occurred = 0;
         return self->getseg(self);
