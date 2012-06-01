@@ -8,11 +8,8 @@ import sys
 #
 U = 23020
 Np = 128
-#S_f = 0.1
 #alpha = 1 / (1-S_f)
 alpha = 1.1
-alpha = 1.07
-minfree = Np
 minfree = 3
 T = int(U * alpha) 
 
@@ -53,9 +50,12 @@ pool3 = ftlsim.pool(ftl, "greedy", Np)
 
 # #pools = ((0.0849,pool1), (0.0548,pool2), (0.0415,pool2a), (0.0408,pool2b), (0.0563,pool2c), (0,pool3))
 # #pools = ((0.0850,pool1), (0.0546,pool2), (0.0415,pool2a), (0.0406,pool2b), (0.0559,pool2c), (0.0780,pool2d), (0,pool3))
-# lens = (0.1090, 0.0802, 0.0620, 0.0512, 0.0464, 0.0468, 0)
-lens = (0.0643, 0.0399, 0.0266, 0.0200, 0.0184, 0.0236, 0)
+lens = (0.1090, 0.0802, 0.0620, 0.0512, 0.0464, 0.0468, 0)
+#lens = (0.0643, 0.0399, 0.0266, 0.0200, 0.0184, 0.0236, 0)
 pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool2d, pool3))
+
+#lens = (0.0643, 0.0399, 0.0266, 0.0200, 0.0184, 0.0236, 0)
+#pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool2d, pool3))
 
 # lens = (0.1089, 0.0811, 0.0634, 0.0533, 0.0494, 0)
 # pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool3))
@@ -84,12 +84,20 @@ for p,pool in pools:
     prev = pool
 pool3.next_pool = pool3
 
+util_sum = dict()
+util_n = dict()
+for p,pool in pools:
+    util_sum[pool] = 0.0
+    util_n[pool] = 0
+
 def clean_select():
     global pools
     for p,pool in pools:
         if pool.length > p*T:
             if doprint:
                 print pool.name, pool.tail_util()
+            util_sum[pool] += pool.tail_util()
+            util_n[pool] += 1
             #Uu[pool] += pool.tail_util()
             #Nn[pool] += 1
             ftlsim.return_pool(pool)
@@ -155,8 +163,6 @@ print "ready..."
 #
 r = 0.8
 f = 0.2
-r = 0.9
-f = 0.1
 U_h = int(f*U*Np)
 U_c = U*Np - U_h
 
@@ -218,24 +224,20 @@ ftl.run(src.handle, U*Np*5/3)
 ftl.ext_writes = 0
 ftl.int_writes = 0
 
+print "zz"
+
 #doprint = True
 for i in range(30):
     ftl.run(src.handle, U*Np/5)
     print ftl.ext_writes, ftl.int_writes, (1.0*ftl.int_writes)/ftl.ext_writes
-    #print " ", float(pool3.pages_valid + pool3.pages_invalid) / pool3.pages_valid #, pool2.pages_valid, pool2.pages_invalid
-    #if Nn[pool3] > 0:
-    #print Uu[pool3] / Nn[pool3]
-    #Uu[pool3] = 0.0; Nn[pool3] = 0
-    #poolutil(pool2)
-    #h1,c1,i1 = poolinfo(pool1)
-    #h2,c2,i2 = poolinfo(pool3)
-    #h3 = U_h - h1 - h2
-    #c3 = U_c - c1 - c2
-    #i3 = Np*(T - U) - i1 - i2
-    #for pair in ((h2,c2,i2),): #((h1,c1,i1), (h2,c2,i2)): #, 
-    #h,c,ii = pair
-    #print "%d %d %d %.3f" % (h, c, ii, float(h)/(1+h+c))
-
+    for p,pool in pools:
+        u = 0.0
+        if util_n[pool]:
+            u = util_sum[pool] / util_n[pool]
+        util_sum[pool] = 0.0
+        util_n[pool] = 0
+        print u,
+    print
     sum_e += ftl.ext_writes
     sum_i += ftl.int_writes
     ftl.ext_writes = 0

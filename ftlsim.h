@@ -77,6 +77,7 @@ struct pool {
     int Np, int_writes, ext_writes, i;
     int pages_valid, pages_invalid, length;
     void (*addseg)(struct pool *self, struct segment *blk);
+    void (*insertseg)(struct pool *self, struct segment *blk);
     struct segment * (*getseg)(struct pool *self);
     void (*write)(struct ftl*, struct pool*, int);
     void (*run)(struct pool*, struct getaddr*, int);

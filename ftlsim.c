@@ -33,6 +33,15 @@ static void list_rm(struct segment *b)
     b->next = b->prev = b;
 }
 
+int list_len(struct segment *list)
+{
+    struct segment *p;
+    int i = 0;
+    for (p = list->next; p != list; p = p->next)
+        i++;
+    return i;
+}
+
 static int list_empty(struct segment *b)
 {
     return b->next == b;
@@ -259,6 +268,19 @@ void lru_pool_addseg(struct pool *pool, struct segment *fb)
     
 }
 
+/* insert a block into the pool *after* the frontier.
+ */
+void lru_pool_insertseg(struct pool *pool, struct segment *blk)
+{
+    pool->length++;
+    blk->pool = pool;
+    blk->prev = pool->frontier;
+    blk->next = pool->frontier->next;
+    pool->frontier->next = blk;
+    pool->pages_valid += blk->n_valid;
+    pool->pages_invalid += (pool->Np - blk->n_valid);
+}
+
 void lru_pool_del(struct pool *pool)
 {
     pool->magic = 0;
@@ -305,6 +327,7 @@ struct pool *lru_pool_new(struct ftl *ftl, int Np)
     ftl->pools[i] = val;
 
     val->addseg = lru_pool_addseg;
+    val->insertseg = lru_pool_insertseg;
     val->getseg = lru_pool_getseg;
     val->write = lru_int_write;
     val->del = lru_pool_del;
@@ -385,6 +408,23 @@ static void greedy_pool_addseg(struct pool *pool, struct segment *fb)
     fb->pool = pool;
 }
 
+/* add a segment to the pool, bypassing the write frontier.
+ */
+static void greedy_pool_insertseg(struct pool *pool, struct segment *blk)
+{
+    pool->length++;
+
+    blk->in_pool = 1;
+    blk->pool = pool;
+    
+    pool->pages_valid += blk->n_valid;
+    pool->pages_invalid += (pool->Np - blk->n_valid);
+
+    list_add(blk, &pool->bins[blk->n_valid]);
+    if (blk->n_valid < pool->min_valid)
+        pool->min_valid = blk->n_valid;
+}
+
 static void greedy_int_write(struct ftl *ftl, struct pool *pool, int lba)
 {
     ftl->int_writes++;
@@ -441,6 +481,7 @@ struct pool *greedy_pool_new(struct ftl *ftl, int Np)
         pool->bins[i].next = pool->bins[i].prev = &pool->bins[i];
     
     pool->addseg = greedy_pool_addseg;
+    pool->insertseg = greedy_pool_insertseg;
     pool->getseg = greedy_pool_getseg;
     pool->write = greedy_int_write;
     pool->del = greedy_pool_del;
