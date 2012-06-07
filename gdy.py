@@ -19,9 +19,11 @@ gdy.target_free = 32
 hist = dict()
 def exit_stats(tmp, nv, blk):
     global hist
+    print 'exit_stats'
     if nv not in hist:
         hist[nv] = 0
     hist[nv] += 1
+    return hist
 
 lowpgs = 0
 

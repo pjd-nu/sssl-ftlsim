@@ -39,6 +39,4 @@ struct greedylru {
 struct greedylru *greedylru_new(int T, int U, int Np);
 void greedylru_del(struct greedylru *g);
 
-void runsim_stats_exit(struct runsim *sim, int n_valid, int blknum);
-void runsim_stats_enter(struct runsim *sim, int blknum);
-void runsim_stats_write(struct runsim *sim, int addr, int blknum, int pg);
+void runsim_stats_exit(struct runsim *sim, int n_p, int n_valid);
