@@ -26,7 +26,7 @@ struct int_array {          /* kludge for indexed arrays */
 };
 
 struct segment {
-    int magic;                  /* 5E65e65e */
+    int blkno;
     struct segment *next, *prev;
     int  Np;
     int *lba;            /* lba[0..Np-1] = LBA / -1 */
@@ -63,7 +63,7 @@ struct ftl {
     int int_writes, ext_writes;
     int nfree, minfree;
     int npools;
-    struct pool *pools[10];
+    struct pool *pools[100];
     write_selector_t get_input_pool;
     PyObject *get_input_pool_arg;
     clean_selector_t get_pool_to_clean;

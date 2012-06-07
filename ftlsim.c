@@ -63,16 +63,17 @@ static int list_empty(struct segment *b)
 
 static struct segment *list_pop(struct segment *list)
 {
-    struct segment *b = list->next;
+    struct segment *b = list->prev;
     list_rm(b);
     return b;
 }
 
 struct segment *segment_new(int Np)
 {
+    static int blkno;
     int i;
     struct segment *fb = calloc(sizeof(*fb), 1);
-    fb->magic = 0x5E65e65e;
+    fb->blkno = blkno++;
     fb->Np = Np;
     fb->lba = calloc(Np * sizeof(int), 1);
     for (i = 0; i < Np; i++)
@@ -83,7 +84,6 @@ struct segment *segment_new(int Np)
 
 void segment_del(struct segment *fb)
 {
-    fb->magic = 0;
     free(fb);
 }
 

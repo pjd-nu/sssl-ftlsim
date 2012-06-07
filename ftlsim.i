@@ -30,6 +30,7 @@
 
 struct segment {
     int  n_valid;
+    int  blkno;
 };
 
 %extend segment {
