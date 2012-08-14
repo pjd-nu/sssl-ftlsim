@@ -32,6 +32,7 @@ struct segment {
     int *lba;            /* lba[0..Np-1] = LBA / -1 */
     int  in_pool;        /* false if we're still the write frontier */
     int  n_valid;
+    int  erasures;
     struct pool *pool;
 };
 

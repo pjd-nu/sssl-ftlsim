@@ -31,6 +31,7 @@
 struct segment {
     int  n_valid;
     int  blkno;
+    int  erasures;
 };
 
 %extend segment {
