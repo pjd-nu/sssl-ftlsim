@@ -90,6 +90,7 @@ struct pool {
     struct ftl *ftl;
     struct segment *frontier, *tail;
     int Np, int_writes, ext_writes, i;
+    int invalidations;
     int pages_valid, pages_invalid, length;
     void (*addseg)(struct pool *self, struct segment *blk);
     void (*insertseg)(struct pool *self, struct segment *blk);

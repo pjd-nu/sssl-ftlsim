@@ -104,7 +104,8 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
     if (self->pool && self->in_pool) {
         self->pool->pages_valid--;
         self->pool->pages_invalid++;
-
+        self->pool->invalidations++;
+        
         if (self->pool->bins) {
             list_rm(self);
             list_add(self, &self->pool->bins[self->n_valid]);
