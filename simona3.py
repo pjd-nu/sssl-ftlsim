@@ -37,9 +37,13 @@ import ftlsim
 
 # Total blocks and user-visible blocks, based on parameters above
 #
-T = 2048 * 8 * 8
-U = T - T*8/100
-T = T - T/100
+T_plane = 2048
+U_plane = 2048 - 163
+minfree = 20                            # blocks per plane
+minfree_elmt = 164
+
+T = T_plane * 8 * 8
+U = U_plane * 8 * 8
 
 # The MSR simulator reserves one page per block for mapping
 # information, so only N-1 can be used for user data.
@@ -52,71 +56,86 @@ Np = 63
 nelements = 8
 nplanes = 8
 npools = nelements * nplanes
-minfree = 1
 
 ftl = ftlsim.ftl(T, Np)
 
-# Greedy-managed pools - one for each plane, organized by element
-#
-elements = []
-for i in range(nelements):
-    planes = [ftlsim.pool(ftl, "greedy", Np) for j in range(nplanes)]
-    elements.append(planes)
+# MSR does round-robin next-free allocation of blocks within an element, if
+# PLANE_BLOCKS_FULL_STRIPE is specified then:
+#    block# = <nelements> * <blk# in plane> + <plane#>
+# That would be a pain, compared to using a freelist, and planes mostly just
+# affect timing performance, so we'll use a single greedy pool per element.
+# 
 
-# allocate segments, with one freelist per plane
+elements = [ftlsim.pool(ftl, "greedy", Np) for i in range(nelements)]
+# for e in elements:
+#     e.msr = 1
+
+# allocate segments, with one freelist per element
 #
-freelist = []
-for i in range(nelements):
-    lists = []
-    for j in range(nplanes):
-        list = [ftlsim.segment(Np)
-                for i in range(minfree + T/(nplanes*nelements))]
-        for s in list:
-            s.thisown = False
-        lists.append(list)
-    freelist.append(lists)
+blks_per_plane = minfree + T/(nplanes*nelements)
+blks_per_elmt = nplanes * blks_per_plane
+
+freemap = [ [None] * blks_per_elmt for i in range(nelements) ]
+next_free = [0] * nelements
+blks_free = [blks_per_elmt] * nelements
 
 for i in range(nelements):
-    for j in range(nplanes):
-        elements[i][j].add_segment(freelist[i][j].pop())
+    list = [ftlsim.segment(Np) for j in range(blks_per_elmt)]
+    map = freemap[i]
+    for s,j in zip(list,range(blks_per_elmt)):
+	s.thisown = False
+	s.elem = i
+	s.blkno = j
+	map[j] = s
+
+def getblk(elmt):
+    global freemap, next_free, blks_free
+    map = freemap[elmt]
+    i = next_free[elmt]
+    for j in range(blks_per_elmt):
+	k = (i+j) % blks_per_elmt
+	if map[k] is not None:
+	    tmp = map[k]
+	    map[k] = None
+	    blks_free[elmt] -= 1
+	    next_free[elmt] = (k+1) % blks_per_elmt
+	    return tmp
+    return None
+
+def putblk(elmt, blk):
+    global freemap, blks_free
+    map = freemap[elmt]
+    map[blk.blkno] = blk
+    blks_free[elmt] += 1
+    
+for i in range(nelements):
+    elements[i].add_segment(getblk(i))
 
 intwrites = 0
 extwrites = 0
 
 verbose = False
+
+# MSR algorithm - write at active page in active block, then go to next free block.
+# blocks numbered 0..N-1 in element, if full_stripe then (block mod N_elements) = plane
+#
 # individual flash page write (internal copy or external write)
 #
-def int_write(ftl, elem, plane, lba):
+def int_write(ftl, elem, lba):
     global intwrites, elements, freelist
     intwrites += 1
     b = ftl.find_blk(lba)
     if b is not None:
         pg = ftl.find_page(lba)
         b.overwrite(pg, lba)
-    p = elements[elem][plane]
+    e = elements[elem]
 
     if verbose:
-        print "write %d %d %d %d" % (lba, p.frontier.blkno * Np + p.i,
-                                     plane, elem)
-    p.frontier.write(p.i, lba)
-    p.i += 1
-    if p.i >= Np:
-        p.add_segment(freelist[elem][plane].pop())
-
-# block allocation for new writes - pick the last plane used, unless
-# it has fewer free blocks than another one.
-#
-plane_to_write = [0] * nplanes
-def get_plane(elem):
-    global elements, last_element, nelements, freelist
-    i = plane_to_write[elem]
-    n = len(freelist[elem][i])
-    for j in range(nplanes):
-        k = (i+j) % nplanes
-        if len(freelist[elem][k]) > n:
-            break
-    plane_to_write[elem] = k
-    return k
+        print "write %d %d %d" % (lba, p.frontier.blkno * Np + e.i, elem)
+    e.frontier.write(e.i, lba)
+    e.i += 1
+    if e.i >= Np:
+        e.add_segment(getblk(elem))
 
 # external host write - write the LBA and then do on-demand cleaning
 #
@@ -124,30 +143,36 @@ def host_write(lba):
     global ftl, elements, extwrites
     extwrites += 1
 
-    # writes are striped by LBA between elements; plane selection
-    # logic is in the function above
+    # writes are striped by LBA between elements
     #
     elem = lba % nelements
-    plane = get_plane(elem)
-    int_write(ftl, elem, plane, lba)
-    
-    while len(freelist[elem][plane]) < minfree:
-        pool = min(elements[elem], key=lambda(p): p.tail_util())
-        b = pool.remove_segment()
-        for i in range(Np):
-            a = b.page(i)
-            if a != -1:
-                plane2 = get_plane(elem)
-                int_write(ftl, elem, plane2, a)
-        freelist[elem][plane].append(b)
+    int_write(ftl, elem, lba)
 
-# initialize by writing every LBA once
+    if blks_free[elem] < minfree_elmt:
+	pool = elements[elem]
+	while blks_free[elem] <= minfree_elmt:
+	    b = pool.remove_segment()
+	    for i in range(Np):
+		a = b.page(i)
+		if a != -1:
+		    int_write(ftl, elem, a)
+	    putblk(elem, b)
+
+# initialize by writing every LBA once. inlined from int_write...
 #
 print 'writing', U*Np
-for a in range(U*Np):
-    host_write(a)
-    if a % 100000 == 99999:
-        print a+1
+for lba in range(U*Np):
+    elem = lba % nelements
+    e = elements[elem]
+    e.frontier.write(e.i, lba)
+    e.i += 1
+    if e.i >= Np:
+        e.add_segment(getblk(elem))
+
+# for a in range(U*Np):
+#     host_write(a)
+#     if False and a % 100000 == 99999:
+#         print a+1
 
 print "ready..."
 #verbose = True
@@ -161,7 +186,7 @@ src = getaddr.trace(file)
 #
 i,j = 0,0
 while not src.eof:
-    ext_writes,int_writes = 0,0
+    extwrites,intwrites = 0,0
     i=0
     a = src.handle.next()
     while i < 100000 and a != -1 and not src.eof:
@@ -170,7 +195,7 @@ while not src.eof:
         i += 1
     if extwrites > 0:
         print extwrites, intwrites, (1.0*intwrites)/extwrites
-    sum_e += ext_writes
-    sum_i += int_writes
+    sum_e += extwrites
+    sum_i += intwrites
 
 print (1.0*sum_i)/sum_e
