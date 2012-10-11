@@ -119,7 +119,7 @@ struct ftl {
 struct pool {
     struct segment *frontier;
     int i, pages_valid, pages_invalid, length;
-    int invalidations;
+    int invalidations, msr;
     struct pool *next_pool;
     double rate;
 };

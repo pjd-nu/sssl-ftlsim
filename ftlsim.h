@@ -53,7 +53,6 @@ extern clean_selector_t clean_select_python;
 extern void return_pool(struct pool *);
 
 struct ftl {
-    int magic;                  /* Fff77711 */
     struct segment *free_list;
     struct {
         struct segment *block;
@@ -85,7 +84,7 @@ struct getaddr {
 };
 
 struct pool {
-    int magic;                  /* 60016001 */
+    int msr;                    /* if 1 emulate MSR cleaning behavior */
     struct ftl *ftl;
     struct segment *frontier, *tail;
     int Np, int_writes, ext_writes, i;

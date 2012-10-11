@@ -89,7 +89,10 @@ void segment_del(struct segment *fb)
 
 void do_segment_write(struct segment *self, int page, int lba)
 {
+    struct ftl *ftl = self->pool->ftl;
     assert(page < self->Np && page >= 0 && self->lba[page] == -1);
+    assert(lba >= 0 && lba < ftl->T * ftl->Np);
+    
     self->lba[page] = lba;
     self->pool->ftl->map[lba].block = self;
     self->pool->ftl->map[lba].page_num = page;
@@ -101,6 +104,8 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
     assert(page < self->Np && page >= 0 && self->lba[page] == lba);
     self->lba[page] = -1;
     self->n_valid--;
+    assert(self->n_valid >= 0 && self->n_valid < self->Np);
+    
     if (self->pool && self->in_pool) {
         self->pool->pages_valid--;
         self->pool->pages_invalid++;
@@ -118,7 +123,6 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
 struct ftl *ftl_new(int T, int Np)
 {
     struct ftl *ftl = calloc(sizeof(*ftl), 1);
-    ftl->magic = 0xFff77711;
     ftl->T = T;
     ftl->Np = Np;
     ftl->map = calloc(sizeof(*ftl->map)*T*Np, 1);
@@ -129,7 +133,6 @@ struct ftl *ftl_new(int T, int Np)
 void ftl_del(struct ftl *ftl)
 {
     struct segment *b;
-    ftl->magic = 0;
     while ((b = do_get_blk(ftl)) != NULL)
         segment_del(b);
     free(ftl->map);
@@ -298,7 +301,6 @@ void lru_pool_insertseg(struct pool *pool, struct segment *blk)
 
 void lru_pool_del(struct pool *pool)
 {
-    pool->magic = 0;
     free(pool);
 }
 double ewma_rate = 0.95;
@@ -308,6 +310,7 @@ double ewma_rate = 0.95;
 static void lru_int_write(struct ftl *ftl, struct pool *pool, int lba)
 {
     assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
+    assert(lba >= 0 && lba < ftl->T * ftl->Np);
     ftl->int_writes++;
     struct segment *b = ftl->map[lba].block;
     int page = ftl->map[lba].page_num;
@@ -333,7 +336,6 @@ struct segment *lru_next_seg(struct pool *pool, struct segment *prev)
 struct pool *lru_pool_new(struct ftl *ftl, int Np)
 {
     struct pool *val = calloc(sizeof(*val), 1);
-    val->magic = 0x60016001;
     
     val->ftl = ftl;
     val->Np = Np;
@@ -372,7 +374,7 @@ static struct segment *greedy_tail_segment(struct pool *pool)
 {
     int i = greedy_tail_n_valid(pool);
     if (i > pool->Np)
-        return NULL;
+        return NULL;            /* NOTREACHED */
     else
         return pool->bins[i].next;
 }
@@ -384,12 +386,28 @@ static struct segment *greedy_pool_getseg(struct pool *pool)
         PyErr_SetString(PyExc_RuntimeError, "ftl: greedy: pool full");
         longjmp(bailout_buf, 1);
     }
-    struct segment *b = list_pop(&pool->bins[i]);
+    
+    struct segment *b = pool->bins[i].next;
+    if (pool->msr) {
+        struct segment *tmp = b->next;
+        while (tmp != &pool->bins[i])
+            if (tmp->blkno < b->blkno)
+                b = tmp;
+    }
+
+    list_rm(b);
     b->in_pool = 0;
 
     pool->pages_valid -= b->n_valid;
     pool->pages_invalid -= (pool->Np - b->n_valid);
-    assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
+    if (!(pool->pages_valid >= 0 && pool->pages_invalid >= 0)) {
+        char buf[128];
+        sprintf(buf, "ftl: pool->pages_valid=%d pool->pages_invalid=%d", pool->pages_valid,
+                pool->pages_invalid);
+        PyErr_SetString(PyExc_RuntimeError, buf);
+        longjmp(bailout_buf, 1);
+    }
+    
     b->pool = NULL;
 
     pool->length--;
@@ -413,6 +431,7 @@ static void greedy_pool_addseg(struct pool *pool, struct segment *fb)
         pool->pages_valid += pool->frontier->n_valid;
         pool->pages_invalid += (pool->Np - pool->frontier->n_valid);
         assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
+        assert(blk->n_valid >= 0 && blk->n_valid <= pool->Np);
 
         list_add(blk, &pool->bins[blk->n_valid]);
         if (blk->n_valid < pool->min_valid)
@@ -434,7 +453,8 @@ static void greedy_pool_insertseg(struct pool *pool, struct segment *blk)
     
     pool->pages_valid += blk->n_valid;
     pool->pages_invalid += (pool->Np - blk->n_valid);
-
+    assert(blk->n_valid >= 0 && blk->n_valid <= pool->Np);
+    
     list_add(blk, &pool->bins[blk->n_valid]);
     if (blk->n_valid < pool->min_valid)
         pool->min_valid = blk->n_valid;
@@ -459,7 +479,6 @@ static void greedy_int_write(struct ftl *ftl, struct pool *pool, int lba)
 
 static void greedy_pool_del(struct pool *pool)
 {
-    pool->magic = 0;
     free(pool->bins);
     free(pool);
 }
@@ -484,7 +503,6 @@ struct segment *greedy_next_seg(struct pool *pool, struct segment *prev)
 struct pool *greedy_pool_new(struct ftl *ftl, int Np)
 {
     struct pool *pool = calloc(sizeof(*pool), 1);
-    pool->magic = 0x60016002;
     pool->ftl = ftl;
     pool->Np = Np;
 
