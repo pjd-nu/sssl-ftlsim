@@ -390,9 +390,11 @@ static struct segment *greedy_pool_getseg(struct pool *pool)
     struct segment *b = pool->bins[i].next;
     if (pool->msr) {
         struct segment *tmp = b->next;
-        while (tmp != &pool->bins[i])
+        while (tmp != &pool->bins[i]) {
             if (tmp->blkno < b->blkno)
                 b = tmp;
+            tmp = tmp->next;
+        }
     }
 
     list_rm(b);
