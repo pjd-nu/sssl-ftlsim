@@ -30,7 +30,7 @@
 
 struct segment {
     int  n_valid;
-    int  blkno;
+    int  blkno, elem;
     int  erasures;
 };
 

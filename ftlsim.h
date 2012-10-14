@@ -26,7 +26,7 @@ struct int_array {          /* kludge for indexed arrays */
 };
 
 struct segment {
-    int blkno;
+    int blkno, elem;
     struct segment *next, *prev;
     int  Np;
     int *lba;            /* lba[0..Np-1] = LBA / -1 */
