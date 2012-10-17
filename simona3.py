@@ -72,7 +72,7 @@ elements = [ftlsim.pool(ftl, "greedy", Np) for i in range(nelements)]
 
 # allocate segments, with one freelist per element
 #
-blks_per_plane = minfree + T/(nplanes*nelements)
+blks_per_plane = T/(nplanes*nelements)
 blks_per_elmt = nplanes * blks_per_plane
 
 freemap = [ [None] * blks_per_elmt for i in range(nelements) ]
@@ -87,6 +87,9 @@ for i in range(nelements):
 	s.elem = i
 	s.blkno = j
 	map[j] = s
+
+import copy
+physblks = [ copy.copy(map) for map in freemap ]
 
 def getblk(elmt):
     global freemap, next_free, blks_free
@@ -114,7 +117,7 @@ for i in range(nelements):
 intwrites = 0
 extwrites = 0
 
-verbose = False
+verbose = True
 
 # MSR algorithm - write at active page in active block, then go to next free block.
 # blocks numbered 0..N-1 in element, if full_stripe then (block mod N_elements) = plane
@@ -130,8 +133,11 @@ def int_write(ftl, elem, lba):
         b.overwrite(pg, lba)
     e = elements[elem]
 
+    # lpn active_page active_plane elem_num
     if verbose:
-        print "write %d %d %d" % (lba, p.frontier.blkno * Np + e.i, elem)
+        print "write %d %d %d %d" % (lba/nelements,
+                                     e.frontier.blkno * (Np+1) + e.i,
+                                     e.frontier.blkno % nplanes, elem)
     e.frontier.write(e.i, lba)
     e.i += 1
     if e.i >= Np:
@@ -160,7 +166,7 @@ def host_write(lba):
 
 # initialize by writing every LBA once. inlined from int_write...
 #
-print 'writing', U*Np
+#print 'writing', U*Np
 for lba in range(U*Np):
     elem = lba % nelements
     e = elements[elem]
@@ -169,12 +175,37 @@ for lba in range(U*Np):
     if e.i >= Np:
         e.add_segment(getblk(elem))
 
+def printall():
+    for i in range(nelements):
+        print 'element', i
+        print 'physical blocks:'
+        map = physblks[i]
+        for j in range(blks_per_elmt):
+            b = map[j]
+            print j,
+            for k in range(Np):
+                print b.page(k)/nelements, 
+            print '-1 '
+        print 'logical blocks:'
+        lba = 0
+        lba_max = U_plane * nplanes * Np
+        pool = elements[i]
+        while lba < lba_max:
+            for k in range(63):
+                b = ftl.find_blk(lba*nplanes + i)
+                p = ftl.find_page(lba*nplanes + i)
+                print b.blkno * (Np+1) + p,
+                lba += 1
+            print ' '
+
+    import sys
+    sys.exit(0)
+
 # for a in range(U*Np):
 #     host_write(a)
 #     if False and a % 100000 == 99999:
 #         print a+1
 
-print "ready..."
 #verbose = True
 import sys
 file = sys.argv[1]
@@ -190,6 +221,8 @@ while not src.eof:
     i=0
     a = src.handle.next()
     while i < 100000 and a != -1 and not src.eof:
+        if i == 410:
+            print 'foo'
         host_write(a)
         a = src.handle.next()
         i += 1
@@ -199,3 +232,5 @@ while not src.eof:
     sum_i += intwrites
 
 print (1.0*sum_i)/sum_e
+
+printall()
