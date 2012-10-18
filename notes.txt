@@ -1,4 +1,19 @@
 10/17/2012
+two-level hot/cold, p=0.1 alpha=1.1 r=0.8 f=0.2
+at cleaning time:
+  level 1 hot=0.5153 cold=0.1947 invalid=0.2901
+  level 2 hot=0.0829 cold=0.7650 invalid=0.1520
+overall stats (f is fraction total valid pages):
+  level 1 valid=0.8446 invalid=0.1554 alpha=1.1840 f=0.0845
+          hot pages = 0.0712 cold pages = 0.0217
+  level 2 valid=0.9163 invalid=0.0837 alpha=1.0914 f=0.8246
+  	  hot pages = 0.1288 cold pages = 0.7783
+
+Looking at the 2nd stage as a hot/cold LRU, we have:
+  alpha=1.0914
+  r = 0.5153/(0.5153+0.1947) = 0.7258
+  f = 0.1288 / (0.1288+0.7783) = 0.1420
+  lru_hc gives 6.5900, vs. 6.59038 from the calculation in two_pool.
 
 4/25/2012
 test.sh:
