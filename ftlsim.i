@@ -50,6 +50,9 @@ struct segment {
     int page(int _page) {
         return self->lba[_page];
     }
+    void erase(void) {
+        do_segment_erase(self);
+    }
 }
     
 typedef struct pool *(*write_selector_t)(struct ftl*, int lba);
@@ -132,6 +135,8 @@ struct pool {
             p = lru_pool_new(ftl, Np);
         if (!strcmp(type, "greedy"))
             p = greedy_pool_new(ftl, Np);
+        if (!strcmp(type, "null"))
+            p = null_pool_new(ftl, Np);
         if (p != NULL)
             p->next_pool = p;
         return p;

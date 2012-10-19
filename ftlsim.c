@@ -120,6 +120,14 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
     }
 }
 
+void do_segment_erase(struct segment *self)
+{
+    int i;
+    for (i = 0; i < self->Np; i++)
+        self->lba[i] = -1;
+    self->n_valid = 0;
+}
+
 struct ftl *ftl_new(int T, int Np)
 {
     struct ftl *ftl = calloc(sizeof(*ftl), 1);
@@ -582,3 +590,40 @@ static struct pool *python_select_no_arg(struct ftl *ftl)
 }
 
 clean_selector_t clean_select_python = python_select_no_arg;
+
+static void null_pool_addseg(struct pool *pool, struct segment *fb)
+{
+    fb->pool = pool;
+}
+
+static void null_pool_del(struct pool *pool)
+{
+    free(pool);
+}
+
+void null_pool_error(void)
+{
+    *(int*)0 = 0;
+}
+
+struct pool *null_pool_new(struct ftl *ftl, int Np)
+{
+    struct pool *val = calloc(sizeof(*val), 1);
+    
+    val->ftl = ftl;
+    val->Np = Np;
+
+    int i = ftl->npools++;
+    ftl->pools[i] = val;
+
+    val->addseg = null_pool_addseg;
+    val->insertseg = (void*)null_pool_error;
+    val->getseg = (void*)null_pool_error;
+    val->write = (void*)null_pool_error;
+    val->del = null_pool_del;
+    val->tail_utilization = (void*)null_pool_error;
+    val->next_segment = (void*)null_pool_error;
+    val->tail_segment = (void*)null_pool_error;
+    
+    return val;
+}
