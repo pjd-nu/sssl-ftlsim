@@ -59,16 +59,9 @@ npools = nelements * nplanes
 
 ftl = ftlsim.ftl(T, Np)
 
-# MSR does round-robin next-free allocation of blocks within an element, if
-# PLANE_BLOCKS_FULL_STRIPE is specified then:
-#    block# = <nelements> * <blk# in plane> + <plane#>
-# That would be a pain, compared to using a freelist, and planes mostly just
-# affect timing performance, so we'll use a single greedy pool per element.
-# 
-
 elements = [ftlsim.pool(ftl, "greedy", Np) for i in range(nelements)]
-# for e in elements:
-#     e.msr = 1
+for e in elements:
+    e.msr = 1
 
 # allocate segments, with one freelist per element
 #
@@ -77,42 +70,48 @@ blks_per_elmt = nplanes * blks_per_plane
 
 freemap = [ [None] * blks_per_elmt for i in range(nelements) ]
 next_free = [0] * nelements
-blks_free = [blks_per_elmt] * nelements
+blks_free = [0] * nelements
 
+freelists = []
 for i in range(nelements):
     list = [ftlsim.segment(Np) for j in range(blks_per_elmt)]
-    map = freemap[i]
     for s,j in zip(list,range(blks_per_elmt)):
 	s.thisown = False
 	s.elem = i
 	s.blkno = j
-	map[j] = s
+    freelists.append(list)
 
 import copy
 physblks = [ copy.copy(map) for map in freemap ]
 
 def getblk(elmt):
     global freemap, next_free, blks_free
-    map = freemap[elmt]
-    i = next_free[elmt]
-    for j in range(blks_per_elmt):
-	k = (i+j) % blks_per_elmt
-	if map[k] is not None:
-	    tmp = map[k]
-	    map[k] = None
+    assert blks_free[elmt] > 0
+    _map = freemap[elmt]
+    i = next_free[elmt] % blks_per_elmt
+    #j = i
+    while True:                 # fails for full map, but much faster
+	if _map[i] is not None:  # than range()
+	    tmp = _map[i]
+	    _map[i] = None
 	    blks_free[elmt] -= 1
-	    next_free[elmt] = (k+1) % blks_per_elmt
+	    next_free[elmt] = i
+	    assert tmp.elem == elmt
 	    return tmp
+        i = (i+1) % blks_per_elmt
     return None
 
 def putblk(elmt, blk):
     global freemap, blks_free
-    map = freemap[elmt]
-    map[blk.blkno] = blk
+    assert blk.elem == elmt
+    _map = freemap[elmt]
+    idx = (blk.blkno % nplanes) * blks_per_plane + blk.blkno / nplanes
+    assert _map[idx] is None
+    _map[idx] = blk
     blks_free[elmt] += 1
     
 for i in range(nelements):
-    elements[i].add_segment(getblk(i))
+    elements[i].add_segment(freelists[i].pop(0))
 
 intwrites = 0
 extwrites = 0
@@ -125,7 +124,7 @@ verbose = True
 # individual flash page write (internal copy or external write)
 #
 def int_write(ftl, elem, lba):
-    global intwrites, elements, freelist
+    global intwrites, elements
     intwrites += 1
     b = ftl.find_blk(lba)
     if b is not None:
@@ -135,11 +134,12 @@ def int_write(ftl, elem, lba):
 
     # lpn active_page active_plane elem_num
     if verbose:
-        print "write %d %d %d %d" % (lba/nelements,
+        print "write: %d %d %d %d" % (lba/nelements,
                                      e.frontier.blkno * (Np+1) + e.i,
                                      e.frontier.blkno % nplanes, elem)
     e.frontier.write(e.i, lba)
     e.i += 1
+    #print e.frontier.blkno*64 + e.i
     if e.i >= Np:
         e.add_segment(getblk(elem))
 
@@ -173,15 +173,19 @@ for lba in range(U*Np):
     e.frontier.write(e.i, lba)
     e.i += 1
     if e.i >= Np:
-        e.add_segment(getblk(elem))
+        e.add_segment(freelists[elem].pop(0))
+
+for e in range(nelements):
+    for b in freelists[e]:
+	putblk(e, b)
 
 def printall():
     for i in range(nelements):
         print 'element', i
         print 'physical blocks:'
-        map = physblks[i]
+        _map = physblks[i]
         for j in range(blks_per_elmt):
-            b = map[j]
+            b = _map[j]
             print j,
             for k in range(Np):
                 print b.page(k)/nelements, 
@@ -196,7 +200,7 @@ def printall():
                 p = ftl.find_page(lba*nplanes + i)
                 print b.blkno * (Np+1) + p,
                 lba += 1
-            print ' '
+            print ''
 
     import sys
     sys.exit(0)
@@ -206,7 +210,6 @@ def printall():
 #     if False and a % 100000 == 99999:
 #         print a+1
 
-#verbose = True
 import sys
 file = sys.argv[1]
 sum_e = 0
@@ -221,16 +224,15 @@ while not src.eof:
     i=0
     a = src.handle.next()
     while i < 100000 and a != -1 and not src.eof:
-        if i == 410:
-            print 'foo'
         host_write(a)
         a = src.handle.next()
         i += 1
-    if extwrites > 0:
+    if extwrites > 0 and not verbose:
         print extwrites, intwrites, (1.0*intwrites)/extwrites
     sum_e += extwrites
     sum_i += intwrites
 
-print (1.0*sum_i)/sum_e
+if not verbose:
+    print (1.0*sum_i)/sum_e
 
-printall()
+#printall()

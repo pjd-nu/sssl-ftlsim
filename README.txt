@@ -71,7 +71,19 @@ or more independently garbage-collected "pools". Types are:
 segment: a physical flash block
   ftlsim.segment(Np) - constructor
   segment.n_valid - number of valid pages in block
+
+  segment.blkno, segment.erasures - these are arbitrary integers used
+  		 by the python simulation. Note that you can't set
+  		 arbitrary python fields in a segment, as only the C
+  		 structure (not the python object wrapper) traverses
+  		 the innards of the simulator.
+
+The following are used to build custom FTLs:
+
   segment.page(i) - accesses array [0..Np-1] of LBAs (-1 = invalid)
+  segment.write(i, lba) - write the i'th page with indicated LBA
+  segment.overwrite(i, lba) - invalidate mapping. (asserts page(i)=lba)
+  segment.erase() - invalidate all mappings
 
 ftl: FTL instance. It holds a single reverse map [lba to segment,page], 
      and a set of pools, each of which has a write frontier plus
@@ -112,9 +124,15 @@ Only needed for replacing ftl.run():
   ftl.find_page(lba) - find the corresponding page number in the block
   	         (how do I get SWIG to return a pair?)
 
+  ftl.frontier(lba) - ???
+
 ftlsim.pool: a write frontier and associated pool of segments
   ftlsim.pool(ftl, type, Np) - create a pool associated with FTL instance
-	  	'ftl'. 'type' is "lru" or "greedy"
+	  	'ftl'. 'type' is "lru", "greedy", or "null"
+
+  The "null" FTL is used for e.g. building BAST from scratch, since it
+  is needed to connect segments and pools.
+  TODO - link segments and ftl directly, so null pool is not needed.
 
   pool.frontier, .i - write frontier, next page to write in frontier segment
   pool.pages_valid, .pages_invalid - total valid and invalid pages, not
@@ -132,13 +150,16 @@ ftlsim.pool: a write frontier and associated pool of segments
                  pages to a pool, bypassing the write process. Used for
                  windowed greedy algorithm.
 
+  pool.tail_util() - utilization (0..1) of the next segment to be
+  		 replaced. 
+
 Note that the following two are only used if you're replacing
 ftl.run() with Python code.
 
-  ftl.remove_segment() - get a segment for cleaning according to the pool
+  pool.remove_segment() - get a segment for cleaning according to the pool
 		 policy. (e.g. LRU or Greedy)
 
-  ftl.write(lba) - perform a write
+  pool.write(lba) - perform a write
 
 Files:
   setup.py - Python build script
@@ -164,6 +185,8 @@ Example files:
   3hc.py - naive LRU with 3-part data model
 
   two-pool.py - hot/cold data separation with global greedy cleaning
+
+  hybrid-log.py - BAST (hybrid log block)
 
 Error handling still isn't the best, and you may end up needing to use
 GDB to figure out where your Python script went wrong.

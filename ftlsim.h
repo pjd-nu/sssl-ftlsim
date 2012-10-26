@@ -26,7 +26,7 @@ struct int_array {          /* kludge for indexed arrays */
 };
 
 struct segment {
-    int blkno;
+    int blkno, elem;
     struct segment *next, *prev;
     int  Np;
     int *lba;            /* lba[0..Np-1] = LBA / -1 */
@@ -40,6 +40,7 @@ struct segment *segment_new(int Np);
 void segment_del(struct segment *b);
 void do_segment_write(struct segment *self, int page, int lba);
 void do_segment_overwrite(struct segment *self, int page, int lba);
+void do_segment_erase(struct segment *self);
 
 struct ftl;                    /* forward declaration */
 typedef struct pool *(*write_selector_t)(struct ftl*, int lba);
@@ -110,5 +111,6 @@ struct pool {
 extern double ewma_rate;
 struct pool *lru_pool_new(struct ftl *, int Np);
 struct pool *greedy_pool_new(struct ftl *, int Np);
+struct pool *null_pool_new(struct ftl *, int Np);
 
 extern int err_occurred;

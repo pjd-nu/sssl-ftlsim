@@ -30,7 +30,7 @@
 
 struct segment {
     int  n_valid;
-    int  blkno;
+    int  blkno, elem;
     int  erasures;
 };
 
@@ -49,6 +49,9 @@ struct segment {
     }
     int page(int _page) {
         return self->lba[_page];
+    }
+    void erase(void) {
+        do_segment_erase(self);
     }
 }
     
@@ -132,6 +135,8 @@ struct pool {
             p = lru_pool_new(ftl, Np);
         if (!strcmp(type, "greedy"))
             p = greedy_pool_new(ftl, Np);
+        if (!strcmp(type, "null"))
+            p = null_pool_new(ftl, Np);
         if (p != NULL)
             p->next_pool = p;
         return p;
