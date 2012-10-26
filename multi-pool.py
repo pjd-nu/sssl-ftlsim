@@ -83,6 +83,11 @@ pools = zip(lens, (pool1, pool2, pool2a, pool2b, pool2c, pool2d, pool3))
 # #pool2c.next_pool = pool3
 # pool3.next_pool = pool3
 
+# r = 0.9, f = 0.1, alpha = 1.08
+
+ppp = [0.0727, 0.0418, 0.0264, 0.0197, 0.0193, 0.0291, 0.0584, 0.0575,
+       0.0529, 0.0489, 0.0450, 0.0415, 0.0382, 0.0352, 0.0324]
+
 #pools = ((0,pool3),)
 
 prev = None
