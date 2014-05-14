@@ -1,7 +1,11 @@
 
        SSSL-ftlsim -- a fast Flash Translation Layer simulator
 
-		   Peter Desnoyers pjd@ccs.neu.edu
+		   Peter Desnoyers, pjd@ccs.neu.edu
+		      Solid-State Storage Lab
+		Northeastern University Computer Science
+
+Version 0.1, May 14 2012
 
 SSSL-ftlsim is a set of Python extensions, implemented in C using the
 SWIG interface generator, for generating traffic distributions
@@ -41,6 +45,9 @@ invariants:
       base_(i+1) - base_i = gen_i.max - ranges are independent
       p_n                             - total probability = 1
 
+Remember to set gen_i.thisown = 0 so that Python doesn't garbage
+collect the object after it goes out of scope.
+
 3. getaddr.trace(file)
 
 File contains lines of the form '<addr> <len>'. For each pair 'A N'
@@ -57,30 +64,45 @@ genaddr.py - python version of traffic generator
 
 lambertw - the Lambert W function, for calculating optimal cleaning
 
-ftlsim - FTL simulator, with the following types:
+ftlsim - FTL simulator, consisting of the FTL itself (basically the
+reverse LBA-to-physical block map and a freelist), segments, and one
+or more independently garbage-collected "pools". Types are:
 
 segment: a physical flash block
   ftlsim.segment(Np) - constructor
   segment.n_valid - number of valid pages in block
-  segment.lbas[].val - array [0..Np-1] of LBAs (-1 for invalid pages)
+
+  segment.blkno, segment.erasures - these are arbitrary integers used
+  		 by the python simulation. Note that you can't set
+  		 arbitrary python fields in a segment, as only the C
+  		 structure (not the python object wrapper) traverses
+  		 the innards of the simulator.
+
+The following are used to build custom FTLs:
+
+  segment.page(i) - accesses array [0..Np-1] of LBAs (-1 = invalid)
+  segment.write(i, lba) - write the i'th page with indicated LBA
+  segment.overwrite(i, lba) - invalidate mapping. (asserts page(i)=lba)
+  segment.erase() - invalidate all mappings
 
 ftl: FTL instance. It holds a single reverse map [lba to segment,page], 
      and a set of pools, each of which has a write frontier plus
      additional blocks
 
-  ftlsim.ftl(T, Np) - creates a new FTL instance with a reverse map for
-       	     T total segments, with segment size Np.
-	     (whoops - should be 'U', I think?)
+  ftlsim.ftl(U, Np) - creates a new FTL instance with a reverse map for
+       	     U total segments, with segment size Np.
 
   ftl.int_writes, .ext_writes - internal and external write count
   ftl.nfree, .minfree - current number of free segments, target minimum #
   ftl.get_input_pool - which pool to write to. possible values are:
-  		  write_select_first
+  		  write_select_first (*default)
 		  write_select_top_down
 		  write_select_python - evaluates 'get_input_pool_arg'
   ftl.get_pool_to_clean - which one to clean a segment from. Values:
-  		  clean_select_first
+  		  clean_select_first (*default)
 		  clean_select_python - evaluates 'get_pool_to_clean_arg'
+
+  Note that the default behavior is what you want for naive cleaning.
 
 return_pool():
   Due to SWIG limitations, Python callbacks 'get_input_pool_arg' and
@@ -93,16 +115,24 @@ return_pool():
 	  	    ftl.put_blk() before running the simulation. 
 
   ftl.run(addrgen, count) - run using addresses from 'addrgen' for 'count'
-  	     	      iterations 
+  	     	   iterations. If there are free blocks from
+  	     	   ftl.put_blk() it will use them; otherwise cleaning
+  	     	   is parameterized above.
 
 Only needed for replacing ftl.run():
   ftl.find_blk(lba) - returns segment object for physical block holding 'lba'
   ftl.find_page(lba) - find the corresponding page number in the block
   	         (how do I get SWIG to return a pair?)
 
+  ftl.frontier(lba) - ???
+
 ftlsim.pool: a write frontier and associated pool of segments
   ftlsim.pool(ftl, type, Np) - create a pool associated with FTL instance
-	  	'ftl'. 'type' is "lru" or "greedy"
+	  	'ftl'. 'type' is "lru", "greedy", or "null"
+
+  The "null" FTL is used for e.g. building BAST from scratch, since it
+  is needed to connect segments and pools.
+  TODO - link segments and ftl directly, so null pool is not needed.
 
   pool.frontier, .i - write frontier, next page to write in frontier segment
   pool.pages_valid, .pages_invalid - total valid and invalid pages, not
@@ -116,13 +146,20 @@ ftlsim.pool: a write frontier and associated pool of segments
 		 the first segment; after that it should be handled
 		 within run()
 
+  pool.insert_segment(segment) - move a segment containing valid and invalid
+                 pages to a pool, bypassing the write process. Used for
+                 windowed greedy algorithm.
+
+  pool.tail_util() - utilization (0..1) of the next segment to be
+  		 replaced. 
+
 Note that the following two are only used if you're replacing
 ftl.run() with Python code.
 
-  ftl.remove_segment() - get a segment for cleaning according to the pool
+  pool.remove_segment() - get a segment for cleaning according to the pool
 		 policy. (e.g. LRU or Greedy)
 
-  ftl.write(lba) - perform a write
+  pool.write(lba) - perform a write
 
 Files:
   setup.py - Python build script
@@ -131,7 +168,25 @@ Files:
   lambertw.i, lambertw.c
   genaddr.py
 
+Installation:
+  CFLAGS=-O3 python setup.py build
+     and then either:
+  python setup.py install
+     or
+  mv build/lib*/* .
+
 Example files:
   low-level.py - direct Python implementation of cleaning, etc.
   greedy-high.py, lru-high.py - full-speed versions of naive Greedy
   		  	        and LRU cleaning
+  windowed-greedy.py - algorithm from Hu 2009
+
+  2hc.py - naive LRU cleaning with hot/cold data model
+  3hc.py - naive LRU with 3-part data model
+
+  two-pool.py - hot/cold data separation with global greedy cleaning
+
+  hybrid-log.py - BAST (hybrid log block)
+
+Error handling still isn't the best, and you may end up needing to use
+GDB to figure out where your Python script went wrong.
