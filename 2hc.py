@@ -42,11 +42,12 @@ for S_f in (0.07, 0.10, 0.13):
                 aa.thisown = 0
                 addr.add(aa.handle, t, b)
 
-            sim = runsim.lru(T, U, Np);
-            sim.generator = warmup.handle
-            sim.handle.run(T*Np*2)
-            sim.int_writes = 0
-            sim.ext_writes = 0
+            sim = runsim.greedy(T, U, Np);
+            sim.target_free = Np
+            #sim.generator = warmup.handle
+            #sim.handle.run(T*Np*2)
+            #sim.int_writes = 0
+            #sim.ext_writes = 0
             
             sim.generator = addr.handle
 

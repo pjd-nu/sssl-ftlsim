@@ -30,7 +30,7 @@ for S_f in (0.07, 0.10, 0.13):
 
     # iterate across splits in traffic distribution
     for s in splits:
-        maxes = [int(U * np * f) for f in s]
+        maxes = [int(U * Np * f) for f in s]
         bases = cumulative_sum(maxes)
         
         # and across assignments
@@ -43,7 +43,8 @@ for S_f in (0.07, 0.10, 0.13):
                 aa.thisown = 0
                 addr.add(aa.handle, t, b)
 
-            sim = runsim.lru(T, U, Np);
+            sim = runsim.greedy(T, U, Np);
+            sim.target_free = Np
             sim.generator = addr.handle
 
             print "S_f %.3f" % S_f
