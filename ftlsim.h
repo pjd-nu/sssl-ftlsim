@@ -54,6 +54,10 @@ extern clean_selector_t clean_select_first;
 extern clean_selector_t clean_select_python;
 extern void return_pool(struct pool *);
 
+typedef struct segment *(*segment_selector_t)(struct ftl*);
+extern segment_selector_t segment_select_python;
+extern void return_segment(struct segment *);
+
 struct ftl {
     struct segment *free_list;
     struct {
@@ -69,6 +73,8 @@ struct ftl {
     PyObject *get_input_pool_arg;
     clean_selector_t get_pool_to_clean;
     PyObject *get_pool_to_clean_arg;
+    segment_selector_t get_segment_to_clean;
+    PyObject *get_segment_to_clean_arg;
     int write_seq;
 };
 
@@ -107,6 +113,7 @@ struct pool {
     int min_valid;
     struct segment *(*next_segment)(struct pool *pool, struct segment *s);
     struct segment *(*tail_segment)(struct pool *pool);
+    void *(*remove)(struct pool *pool, struct segment *s);
 };
 
 extern double ewma_rate;

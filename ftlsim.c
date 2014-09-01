@@ -199,14 +199,22 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
         check_new_segment(ftl, pool);
 
         while (ftl->nfree < ftl->minfree) {
-            pool = ftl->get_pool_to_clean(ftl);
-            struct segment *b = pool->getseg(pool);
+            struct segment *b = NULL;
+            if (ftl->get_segment_to_clean) {
+                b = ftl->get_segment_to_clean(ftl);
+                pool = b->pool;
+                pool->remove(pool, b);
+            }
+            else if (ftl->get_pool_to_clean) {
+                pool = ftl->get_pool_to_clean(ftl);
+                b = pool->getseg(pool);
+            }
             if (b == NULL) {
                 PyErr_SetString(PyExc_RuntimeError, "ftl: segment cleaning error");
                 longjmp(bailout_buf, 1);
             }
             struct pool *next = pool->next_pool;
-            if (pool == NULL) {
+            if (next == NULL) {
                 PyErr_SetString(PyExc_RuntimeError, "ftl: pool.next_pool = None");
                 longjmp(bailout_buf, 1);
             }
@@ -401,24 +409,8 @@ static struct segment *greedy_tail_segment(struct pool *pool)
         return pool->bins[i].next;
 }
 
-static struct segment *greedy_pool_getseg(struct pool *pool)
+static void greedy_remove(struct pool *pool, struct segment *b)
 {
-    int i = greedy_tail_n_valid(pool);
-    if (i == pool->Np) {
-        PyErr_SetString(PyExc_RuntimeError, "ftl: greedy: pool full");
-        longjmp(bailout_buf, 1);
-    }
-    
-    struct segment *b = pool->bins[i].next;
-    if (pool->msr) {
-        struct segment *tmp = b->next;
-        while (tmp != &pool->bins[i]) {
-            if (tmp->blkno < b->blkno)
-                b = tmp;
-            tmp = tmp->next;
-        }
-    }
-
     list_rm(b);
     b->in_pool = 0;
 
@@ -437,7 +429,27 @@ static struct segment *greedy_pool_getseg(struct pool *pool)
 
     pool->length--;
     assert(pool->length >= 0);
+}
 
+static struct segment *greedy_pool_getseg(struct pool *pool)
+{
+    int i = greedy_tail_n_valid(pool);
+    if (i == pool->Np) {
+        PyErr_SetString(PyExc_RuntimeError, "ftl: greedy: pool full");
+        longjmp(bailout_buf, 1);
+    }
+    
+    struct segment *b = pool->bins[i].next;
+    if (pool->msr) {
+        struct segment *tmp = b->next;
+        while (tmp != &pool->bins[i]) {
+            if (tmp->blkno < b->blkno)
+                b = tmp;
+            tmp = tmp->next;
+        }
+    }
+
+    greedy_remove(pool, b);
     return b;
 }
 
@@ -546,6 +558,7 @@ struct pool *greedy_pool_new(struct ftl *ftl, int Np)
     pool->tail_utilization = greedy_tail_utilization;
     pool->next_segment = greedy_next_seg;
     pool->tail_segment = greedy_tail_segment;
+    pool->remove = greedy_remove;
     
     return pool;
 }
@@ -566,12 +579,19 @@ static struct pool *do_select_top_down(struct ftl* ftl, int lba)
 }
 
 struct pool *pool_retval;
+struct segment *segment_retval;
 void return_pool(struct pool *pool)
 {
+    segment_retval = NULL;
     pool_retval = pool;
 }
+void return_segment(struct segment *seg)
+{
+    segment_retval = seg;
+    pool_retval = NULL;
+}
 
-static struct pool *python_select_1_arg(struct ftl *ftl, int lba)
+static struct pool *python_select_input(struct ftl *ftl, int lba)
 {
     PyObject *args = Py_BuildValue("(i)", lba);
     PyObject *result = PyEval_CallObject(ftl->get_input_pool_arg, args);
@@ -586,7 +606,7 @@ static struct pool *python_select_1_arg(struct ftl *ftl, int lba)
 
 write_selector_t write_select_first = do_select_first;
 write_selector_t write_select_top_down = do_select_top_down;
-write_selector_t write_select_python = python_select_1_arg;
+write_selector_t write_select_python = python_select_input;
 
 static struct pool *do_clean_select_first(struct ftl *ftl)
 {
@@ -594,7 +614,7 @@ static struct pool *do_clean_select_first(struct ftl *ftl)
 }
 clean_selector_t clean_select_first = do_clean_select_first;
 
-static struct pool *python_select_no_arg(struct ftl *ftl)
+static struct pool *python_select_pool(struct ftl *ftl)
 {
     PyObject *args = Py_BuildValue("()");
     PyObject *result = PyEval_CallObject(ftl->get_pool_to_clean_arg, args);
@@ -606,7 +626,20 @@ static struct pool *python_select_no_arg(struct ftl *ftl)
     return pool_retval;
 }
 
-clean_selector_t clean_select_python = python_select_no_arg;
+clean_selector_t clean_select_python = python_select_pool;
+
+static struct segment *python_select_segment(struct ftl *ftl)
+{
+    PyObject *args = Py_BuildValue("()");
+    PyObject *result = PyEval_CallObject(ftl->get_segment_to_clean_arg, args);
+    if (PyErr_Occurred()) 
+        longjmp(bailout_buf, 1);
+    if (result != NULL) {
+        Py_DECREF(result);
+    }
+    return segment_retval;
+}
+segment_selector_t segment_select_python = python_select_segment;
 
 static void null_pool_addseg(struct pool *pool, struct segment *fb)
 {

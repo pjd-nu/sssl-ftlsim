@@ -64,7 +64,11 @@ write_selector_t write_select_python;
 typedef struct pool *(*clean_selector_t)(struct ftl*);
 clean_selector_t clean_select_first;
 clean_selector_t clean_select_python;
+typedef struct segment *(*segment_selector_t)(struct ftl*);
+segment_selector_t segment_select_python;
+
 void return_pool(struct pool *);
+void return_segment(struct segment *);
 
 struct ftl {
     int int_writes, ext_writes;
@@ -73,6 +77,8 @@ struct ftl {
     PyObject *get_input_pool_arg;
     clean_selector_t get_pool_to_clean;
     PyObject *get_pool_to_clean_arg;
+    segment_selector_t get_segment_to_clean;
+    PyObject *get_segment_to_clean_arg;
 };
 
 %extend ftl {
@@ -158,9 +164,13 @@ struct pool {
         err_occurred = 0;
         self->insertseg(self, blk);
     }
-    struct segment *remove_segment(void) {
+    struct segment *get_segment(void) {
         err_occurred = 0;
         return self->getseg(self);
+    }
+    void *remove_segment(struct segment *seg) {
+        err_occurred = 0;
+        self->remove(self, seg);
     }
     struct segment *tail_segment(void) {
         err_occurred = 0;
