@@ -47,7 +47,7 @@ def host_write(lba):
     int_write(lba)
     
     while len(freelist) < minfree:
-        b = lru.remove_segment()
+        b = lru.get_segment()
         for i in range(Np):
             a = b.lbas[i].val
             if a != -1:

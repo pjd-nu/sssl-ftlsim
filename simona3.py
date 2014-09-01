@@ -170,7 +170,7 @@ def host_write(lba):
     if blks_free[elem] < minfree_elmt-1:
 	pool = elements[elem]
 	while blks_free[elem] <= minfree_elmt-1:
-	    b = pool.remove_segment()
+	    b = pool.get_segment()
             if verbose:
                 print "clean2:", elem, b.blkno % 8, b.blkno
             #if b.blkno == 1575:

@@ -58,7 +58,7 @@ def clean_select():
     global lru, gdy
     #print lru.length, gdy.length, lru.pages_invalid, gdy.pages_invalid
     while gdy.length < greedy_len:
-        b = lru.remove_segment()
+        b = lru.get_segment()
         gdy.insert_segment(b)
     if gdy.pages_invalid > 1:
         ftlsim.return_pool(gdy)
