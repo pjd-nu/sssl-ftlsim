@@ -55,7 +55,9 @@ struct segment {
         do_segment_erase(self);
     }
 }
-    
+
+struct segment *get_segment(int n);
+
 typedef struct pool *(*write_selector_t)(struct ftl*, int lba);
 write_selector_t write_select_first;
 write_selector_t write_select_top_down;

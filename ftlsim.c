@@ -68,12 +68,24 @@ static struct segment *list_pop(struct segment *list)
     return b;
 }
 
+struct segment **allsegs;
+int max_segs = 1024;
+int num_segs = 0;
+
 struct segment *segment_new(int Np)
 {
-    static int blkno;
     int i;
     struct segment *fb = calloc(sizeof(*fb), 1);
-    fb->blkno = blkno++;
+    fb->blkno = num_segs++;
+
+    if (allsegs == NULL)
+        allsegs = malloc(sizeof(allsegs[0])*max_segs);
+    if (fb->blkno >= max_segs) {
+        max_segs *= 2;
+        allsegs = realloc(allsegs, sizeof(allsegs[0])*max_segs);
+    }
+    allsegs[fb->blkno] = fb;
+    
     fb->Np = Np;
     fb->lba = calloc(Np * sizeof(int), 1);
     for (i = 0; i < Np; i++)
@@ -85,6 +97,13 @@ struct segment *segment_new(int Np)
 void segment_del(struct segment *fb)
 {
     free(fb);
+}
+
+struct segment *get_segment(int i)
+{
+    if (i >= num_segs)
+        return NULL;
+    return allsegs[i];
 }
 
 void do_segment_write(struct segment *self, int page, int lba)

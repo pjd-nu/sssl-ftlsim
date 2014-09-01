@@ -43,11 +43,16 @@ ftl.get_segment_to_clean = ftlsim.cvar.segment_select_python
 gdy = ftlsim.pool(ftl, "greedy", Np)
 gdy.next_pool = gdy
 
+# for wear leveling
+wl = [[] for i in range(opts.max + 20)]
+wl[0] = [i for i in range(T)]
+
 # Allocate segments...
 #
 freelist = [ftlsim.segment(Np) for i in range(T)]
 for b in freelist:
     b.thisown = False
+
 gdy.add_segment(freelist.pop())
 for b in freelist:
     ftl.put_blk(b)
@@ -79,24 +84,27 @@ done = False
 total = 0
 
 count = 0
+max_erase = opts.max
+wl_rate = opts.rate
 def clean_select():
     global gdy, opts, count, done
     count += 1
-    if count > opts.rate:
+    if count > wl_rate:
         count = 0
         seg,m = None,999999
-        for s in segments(gdy):
-            if not s.in_pool:
-                continue
-            if s.erasures > opts.max:
+        for i in range(max_erase+20):
+            if wl[i] and seg is None:
+                blkno = wl[i][0]
+                seg = ftlsim.get_segment(blkno)
+            if i > max_erase:
                 done = True
-            if s.erasures < m:
-                seg,m = s,s.erasures
-            if s.n_valid == 0:
-                break
     else:
         seg = gdy.tail_segment()
+    wl[seg.erasures].remove(seg.blkno)
+    
+    wl[seg.erasures+1].append(seg.blkno)
     ftlsim.return_segment(seg)
+    
 ftl.get_segment_to_clean_arg = clean_select
 
 while not done:

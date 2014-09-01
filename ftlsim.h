@@ -36,11 +36,13 @@ struct segment {
     struct pool *pool;
 };
 
+
 struct segment *segment_new(int Np);
 void segment_del(struct segment *b);
 void do_segment_write(struct segment *self, int page, int lba);
 void do_segment_overwrite(struct segment *self, int page, int lba);
 void do_segment_erase(struct segment *self);
+struct segment *get_segment(int n);
 
 struct ftl;                    /* forward declaration */
 typedef struct pool *(*write_selector_t)(struct ftl*, int lba);
