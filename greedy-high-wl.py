@@ -26,11 +26,9 @@ import ftlsim
 import opt, sys
 
 opts = opt.parse(sys.argv[1])
-U,Np = int(opts['U']), int(opts['Np'])
-S_f = float(opts['S_f'])
-minfree = int(opts['minfree'])
+U,Np,minfree = opts.U, opts.Np, opts.minfree
 
-alpha = 1 / (1-S_f)
+alpha = 1 / (1-opts.S_f)
 T = int(U * alpha) + minfree + 1
 
 # FTL with default parameters for single pool
@@ -38,7 +36,7 @@ T = int(U * alpha) + minfree + 1
 ftl = ftlsim.ftl(T, Np)
 ftl.minfree = minfree
 ftl.get_input_pool = ftlsim.cvar.write_select_first
-ftl.get_pool_to_clean = ftlsim.cvar.clean_select_first
+ftl.get_segment_to_clean = ftlsim.cvar.segment_select_python
 
 # Greedy-managed pool
 #
@@ -66,8 +64,8 @@ print "ready..."
 
 # Now create the data source and run
 #
-if 'tracefile' in opts:
-    src = getaddr.trace(opts['tracefile'])
+if opts.has('tracefile'):
+    src = getaddr.trace(opts.tracefile)
 else:
     src = getaddr.uniform(U*Np)
 
@@ -80,44 +78,38 @@ def segments(pool):
 done = False
 total = 0
 
-def get_min_segment(pool):
-    seg,m = None,999999
-    for s in segments(pool):
-        if not s.in_pool:
-            continue
-        if s.erasures < m:
-            seg,m = s,s.erasures
-        if s.n_valid == 0:
-            break
-    return seg
-
-skip = Np * 100
-q = 0
+count = 0
+def clean_select():
+    global gdy, opts, count, done
+    count += 1
+    if count > opts.rate:
+        count = 0
+        seg,m = None,999999
+        for s in segments(gdy):
+            if not s.in_pool:
+                continue
+            if s.erasures > opts.max:
+                done = True
+            if s.erasures < m:
+                seg,m = s,s.erasures
+            if s.n_valid == 0:
+                break
+    else:
+        seg = gdy.tail_segment()
+    ftlsim.return_segment(seg)
+ftl.get_segment_to_clean_arg = clean_select
 
 while not done:
-    for i in range(U/1000):
-        ftl.run(src.handle, skip)
-        s = get_min_segment(gdy)
-        n = 0
-        for j in range(Np):
-            lba = s.page(j)
-            if lba != -1:
-                #print 'w'
-                ftl.write(lba)
-                n += 1
-        ftl.ext_writes -= n
+    ftl.run(src.handle, U*Np/10)
     print ftl.ext_writes, ftl.int_writes, (1.0*ftl.int_writes)/ftl.ext_writes
     total += ftl.ext_writes
     ftl.ext_writes = 0
     ftl.int_writes = 0
     if type(src) is getaddr.trace:
-        src = getaddr.trace(opts['tracefile'])
+        src = getaddr.trace(opts.tracefile)
     for s in segments(gdy):
         if s.erasures > max_erase:
             done = True
-    q += 1
-    if q > 20:
-        break
 
 m = 0
 for s in segments(gdy):
