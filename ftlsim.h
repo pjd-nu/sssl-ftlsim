@@ -78,6 +78,7 @@ void ftl_del(struct ftl*);
 void do_put_blk(struct ftl *self, struct segment *blk);
 struct segment *do_get_blk(struct ftl *self);
 void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count);
+void do_ftl_write(struct ftl *ftl, int lba);
 
 struct getaddr {
     int (*getaddr)(void *self);

@@ -23,10 +23,12 @@ import getaddr
 import ftlsim
 
 # parameters
-#
-U = 23020
-Np = 128
-S_f = 0.07
+import opt, sys
+
+opts = opt.parse(sys.argv[1])
+U,Np = int(opts['U']), int(opts['Np'])
+S_f = float(opts['S_f'])
+
 alpha = 1 / (1-S_f)
 minfree = Np
 T = int(U * alpha) + minfree
@@ -54,17 +56,57 @@ for b in freelist:
 
 # use a sequential address source to write each page once
 #
-seq = getaddr.seq()
-ftl.run(seq.handle, U*Np);
+T0 = T-minfree
+fill = getaddr.fill(T0, U)
+ftl.run(fill.handle, (T0*Np) - 1);
+ftl.ext_writes,ftl.int_writes = 0,0
 
 print "ready..."
 
-# Now run with uniform random traffic for 10 units of 0.1 volume each.
+# Now create the data source and run
 #
-src = getaddr.uniform(U*Np)
-for i in range(10):
+if 'tracefile' in opts:
+    src = getaddr.trace(opts['tracefile'])
+else:
+    src = getaddr.uniform(U*Np)
+
+max_erase = 500
+def segments(pool):
+    s = pool.next_segment(None)
+    while s:
+        yield s
+        s = pool.next_segment(s)
+done = False
+total = 0
+q = 0
+
+while not done:
     ftl.run(src.handle, U*Np/10)
     print ftl.ext_writes, ftl.int_writes, (1.0*ftl.int_writes)/ftl.ext_writes
+    total += ftl.ext_writes
     ftl.ext_writes = 0
     ftl.int_writes = 0
+    if type(src) is getaddr.trace:
+        src = getaddr.trace(opts['tracefile'])
+    for s in segments(gdy):
+        if s.erasures > max_erase:
+            done = True
+    q += 1
+    if q > 20:
+        break
+            
 
+m = 0
+for s in segments(gdy):
+    m = max(m, s.erasures)
+
+e = [0] * (m+1)
+for s in segments(gdy):
+    e[s.erasures] += 1
+
+print 'erasures:'
+for i in range(m+1):
+    if e[i]:
+        print i, e[i]
+
+print 'total writes:', total

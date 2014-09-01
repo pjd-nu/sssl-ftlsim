@@ -172,7 +172,7 @@ static void check_new_segment(struct ftl *ftl, struct pool *pool)
         pool->addseg(pool, b);
     }
 }
-
+    
 void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
 {
     int i, j;
@@ -221,6 +221,18 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
     }
 }
 
+static int getone(void *self)
+{
+    struct getaddr *a = self;
+    return (int)a->private_data;
+}
+
+void do_ftl_write(struct ftl *ftl, int lba)
+{
+    struct getaddr a1 = {.getaddr = getone, .private_data = (int)lba};
+    do_ftl_run(ftl, &a1, 1);
+}
+
 /* cleaning - grab the tail of the pool. the caller of this function
  * is responsible for copying the remaining valid pages.
  */
@@ -245,6 +257,8 @@ struct segment *lru_pool_getseg(struct pool *pool)
     assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
 
     val->pool = NULL;
+    val->erasures++;
+    
     pool->length--;
     assert(pool->length >= 0);
     
@@ -419,6 +433,7 @@ static struct segment *greedy_pool_getseg(struct pool *pool)
     }
     
     b->pool = NULL;
+    b->erasures++;
 
     pool->length--;
     assert(pool->length >= 0);

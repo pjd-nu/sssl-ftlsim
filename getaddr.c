@@ -40,7 +40,29 @@ struct seq *seq_new(void)
     struct seq *seq = calloc(sizeof(*seq), 1);
     seq->handle.getaddr = seq_get;
     seq->handle.del = (void*)free;
+    seq->handle.private_data = seq;
     return seq;
+}
+
+int fill_get(void *private_data)
+{
+    struct fill *fill = private_data;
+    int tmp = fill->next;
+    if (fill->count * fill->U > fill->next * fill->T)
+        fill->next++;
+    fill->count++;
+    return tmp;
+}
+
+struct fill *fill_new(double T, double U)
+{
+    struct fill *fill = calloc(sizeof(*fill), 1);
+    fill->handle.getaddr = fill_get;
+    fill->handle.del = (void*)free;
+    fill->handle.private_data = fill;
+    fill->T = T;
+    fill->U = U;
+    return fill;
 }
 
 int next(struct getaddr *g)
@@ -164,7 +186,7 @@ struct trace *trace_new(char *file)
     struct trace_private *p = calloc(sizeof(*p), 1);
     p->fp = fopen(file, "r");
     t->private_data = p;
-    
+
     return t;
 }
 

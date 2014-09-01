@@ -42,7 +42,20 @@ class uniform(genaddr):
     def next10(self):
         return [random.randint(0, self.max-1) for i in range(10)]
 
+class seq(genaddr):
+    def __init__(self):
+        genaddr.__init__(self)
+        self.next = 0
 
+    def addrs(self):
+        while True:
+            yield(self.next())
+
+    def next(self):
+        tmp = self.next;
+        self.next += 1
+        return tmp
+    
 # probabilistic mix of multiple sources
 # use with genaddr.uniform to generate e.g. hot/cold mixes
 #

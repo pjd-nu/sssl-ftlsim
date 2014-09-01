@@ -24,6 +24,13 @@ struct seq {
 };
 struct seq *seq_new(void);
 
+struct fill {
+    struct getaddr handle;
+    double T, U;
+    int count, next;
+};
+struct fill *fill_new(double T, double U);
+
 struct uniform {
     struct getaddr handle;
     int max;

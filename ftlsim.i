@@ -31,6 +31,7 @@
 struct segment {
     int  n_valid;
     int  blkno, elem;
+    int  in_pool;
     int  erasures;
 };
 
@@ -107,6 +108,10 @@ struct ftl {
     void run(struct getaddr *addrs, int count) {
         err_occurred = 0;
         do_ftl_run(self, addrs, count);
+    }
+    void write(int lba) {
+        err_occurred = 0;
+        do_ftl_write(self, lba);
     }
     ~ftl() {
         err_occurred = 0;

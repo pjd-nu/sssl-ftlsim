@@ -42,6 +42,18 @@ struct seq {
     }
 }
 
+struct fill {
+    struct getaddr handle;
+};
+%extend fill {
+    fill(double T, double U) {
+        return fill_new(T, U);
+    }
+    ~fill() {
+        free(self);
+    }
+}
+
 struct uniform {
     struct getaddr handle;
     int max;
