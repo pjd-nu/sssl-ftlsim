@@ -96,7 +96,7 @@ def clean_select():
                 break
     else:
         seg = gdy.tail_segment()
-        gdy.remove(seg)
+        gdy.remove_segment(seg)
     ftlsim.return_segment(seg)
 ftl.get_segment_to_clean_arg = clean_select
 

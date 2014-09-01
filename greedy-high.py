@@ -26,8 +26,8 @@ import ftlsim
 import opt, sys
 
 opts = opt.parse(sys.argv[1])
-U,Np = int(opts['U']), int(opts['Np'])
-S_f = float(opts['S_f'])
+U,Np = opts.U, opts.Np
+S_f = opts.S_f
 
 alpha = 1 / (1-S_f)
 minfree = Np
@@ -65,8 +65,8 @@ print "ready..."
 
 # Now create the data source and run
 #
-if 'tracefile' in opts:
-    src = getaddr.trace(opts['tracefile'])
+if opts.has('tracefile'):
+    src = getaddr.trace(opts.tracefile)
 else:
     src = getaddr.uniform(U*Np)
 
@@ -87,7 +87,7 @@ while not done:
     ftl.ext_writes = 0
     ftl.int_writes = 0
     if type(src) is getaddr.trace:
-        src = getaddr.trace(opts['tracefile'])
+        src = getaddr.trace(opts.tracefile)
     for s in segments(gdy):
         if s.erasures > max_erase:
             done = True
