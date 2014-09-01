@@ -94,8 +94,12 @@ def clean_select():
         seg,m = None,999999
         for i in range(max_erase+20):
             if wl[i] and seg is None:
-                blkno = wl[i][0]
-                seg = ftlsim.get_segment(blkno)
+                for blkno in wl[i]:
+                    seg = ftlsim.get_segment(blkno)
+                    if seg.in_pool:
+                        break
+            if seg:
+                break
             if i > max_erase:
                 done = True
     else:
