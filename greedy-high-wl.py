@@ -98,14 +98,13 @@ def clean_select():
                     seg = ftlsim.get_segment(blkno)
                     if seg.in_pool:
                         break
-            if seg:
-                break
-            if i > max_erase:
+                    seg = None
+            if wl[i] and i > max_erase:
                 done = True
     else:
         seg = gdy.tail_segment()
+
     wl[seg.erasures].remove(seg.blkno)
-    
     wl[seg.erasures+1].append(seg.blkno)
     ftlsim.return_segment(seg)
     
