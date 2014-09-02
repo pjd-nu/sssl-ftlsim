@@ -70,7 +70,7 @@ if opts.has('tracefile'):
 else:
     src = getaddr.uniform(U*Np)
 
-max_erase = 500
+max_erase = opts.max
 def segments(pool):
     s = pool.next_segment(None)
     while s:
