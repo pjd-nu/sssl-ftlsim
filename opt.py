@@ -13,7 +13,7 @@ class parse:
             name,_,val = tmp
             if val.isdigit():
                 val = int(tmp[2])
-            elif re.match('[0-9]*\.[0-9]*', val):
+            elif re.match('[0-9]+\.[0-9]*', val):
                 val = float(tmp[2])
             setattr(self, tmp[0], val)
         fp.close()
