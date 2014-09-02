@@ -732,7 +732,7 @@ static struct entry *do_remove(struct segment *s)
 
 int do_bins_empty(struct bins *b, int i)
 {
-    return i >= 0 && i < b->n && b->bins[i].next != b->bins[i].prev;
+    return i < 0 || i >= b->n || b->bins[i].next == &b->bins[i];
 }
 
 struct segment *do_bins_pop(struct bins *b, int i)
