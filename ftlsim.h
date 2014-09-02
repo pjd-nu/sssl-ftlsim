@@ -34,6 +34,7 @@ struct segment {
     int  n_valid;
     int  erasures;
     struct pool *pool;
+    void *private;
 };
 
 
@@ -124,3 +125,23 @@ struct pool *greedy_pool_new(struct ftl *, int Np);
 struct pool *null_pool_new(struct ftl *, int Np);
 
 extern int err_occurred;
+
+struct entry {
+    struct entry *next;
+    struct entry *prev;
+    struct segment *s;
+};
+    
+struct bins {
+    int n;
+    struct entry *bins;
+};
+
+extern struct bins *do_bins_new(int);
+extern void do_bins_insert(struct bins *, struct segment *, int);
+extern void do_bins_remove(struct segment *);
+extern void do_bins_delete(struct bins *);
+extern int  do_bins_empty(struct bins *, int);
+extern struct segment *do_bins_tail(struct bins *, int);
+extern struct segment *do_bins_pop(struct bins *, int);
+

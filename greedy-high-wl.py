@@ -44,14 +44,16 @@ gdy = ftlsim.pool(ftl, "greedy", Np)
 gdy.next_pool = gdy
 
 # for wear leveling
-wl = [[] for i in range(opts.max + 20)]
-wl[0] = [i for i in range(T)]
+#
+max_erasures = opts.max
+bins = ftlsim.bins(max_erasures+200)
 
 # Allocate segments...
 #
 freelist = [ftlsim.segment(Np) for i in range(T)]
 for b in freelist:
     b.thisown = False
+    bins.insert(b, 0)
 
 gdy.add_segment(freelist.pop())
 for b in freelist:
@@ -74,7 +76,6 @@ if opts.has('tracefile'):
 else:
     src = getaddr.uniform(U*Np)
 
-max_erase = 500
 def segments(pool):
     s = pool.next_segment(None)
     while s:
@@ -84,28 +85,26 @@ done = False
 total = 0
 
 count = 0
-max_erase = opts.max
 wl_rate = opts.rate
+
 def clean_select():
     global gdy, opts, count, done
     count += 1
     if count > wl_rate:
         count = 0
-        seg,m = None,999999
-        for i in range(max_erase+20):
-            if wl[i] and seg is None:
-                for blkno in wl[i]:
-                    seg = ftlsim.get_segment(blkno)
-                    if seg.in_pool:
-                        break
-                    seg = None
-            if wl[i] and i > max_erase:
-                done = True
+        for i in range(max_erasures+20):
+            seg = bins.tail(i)
+            if seg is None or not seg.in_pool:
+                continue
+            break
     else:
         seg = gdy.tail_segment()
 
-    wl[seg.erasures].remove(seg.blkno)
-    wl[seg.erasures+1].append(seg.blkno)
+    bins.remove(seg)
+    bins.insert(seg, seg.erasures+1)
+    if seg.erasures >= max_erasures:
+        done = True
+
     ftlsim.return_segment(seg)
     
 ftl.get_segment_to_clean_arg = clean_select
@@ -118,9 +117,6 @@ while not done:
     ftl.int_writes = 0
     if type(src) is getaddr.trace:
         src = getaddr.trace(opts.tracefile)
-    for s in segments(gdy):
-        if s.erasures > max_erase:
-            done = True
 
 m = 0
 for s in segments(gdy):

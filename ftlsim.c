@@ -696,3 +696,76 @@ struct pool *null_pool_new(struct ftl *ftl, int Np)
     
     return val;
 }
+
+/* -------------- */
+
+struct bins *do_bins_new(int n)
+{
+    struct bins *b = calloc(sizeof(*b), 1);
+    b->n = n;
+    b->bins = calloc(n * sizeof(*b->bins), 1);
+    int i;
+    for (i = 0; i < n; i++) 
+	b->bins[i].next = b->bins[i].prev = &b->bins[i];
+    return b;
+}
+
+void do_bins_insert(struct bins *b, struct segment *s, int i)
+{
+    struct entry *e = calloc(sizeof(*e), 1);
+    e->s = s;
+    s->private = e;
+    
+    e->next = b->bins[i].next;
+    e->next->prev = e;
+    b->bins[i].next = e;
+    e->prev = &b->bins[i];
+}
+
+static struct entry *do_remove(struct segment *s)
+{
+    struct entry *e = s->private;
+    e->prev->next = e->next;
+    e->next->prev = e->prev;
+    return e;
+}
+
+int do_bins_empty(struct bins *b, int i)
+{
+    return i >= 0 && i < b->n && b->bins[i].next != b->bins[i].prev;
+}
+
+struct segment *do_bins_pop(struct bins *b, int i)
+{
+    if (do_bins_empty(b, i))
+	return NULL;
+    struct entry *e = do_remove(b->bins[i].prev->s);
+    struct segment *s = e->s;
+    s->private = NULL;
+    free(e);
+    return s;
+}
+
+struct segment *do_bins_tail(struct bins *b, int i)
+{
+    if (do_bins_empty(b, i))
+	return NULL;
+    struct entry *e = b->bins[i].prev;
+    return e->s;
+}
+
+void do_bins_remove(struct segment *s)
+{
+    struct entry *e = do_remove(s);
+    free(e);
+    s->private = NULL;
+}
+
+void do_bins_delete(struct bins *b)
+{
+    int i;
+    for (i = 0; i < b->n; i++)
+	while (!do_bins_empty(b, i))
+	    do_bins_pop(b, i);
+    free(b);
+}

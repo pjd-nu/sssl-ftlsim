@@ -133,6 +133,30 @@ struct ftl {
         return NULL;
 }
 
+struct bins {
+};
+%extend bins {
+    bins(int n) {
+	return do_bins_new(n);
+    }
+    ~bins() {
+	do_bins_delete(self);
+    }
+    void insert(struct segment *s, int i) {
+	do_bins_insert(self, s, i);
+    }
+    void remove(struct segment *s) {
+	do_bins_remove(s);
+    }
+    struct segment *tail(int i) {
+	do_bins_tail(self, i);
+    }
+    int is_empty(int i) {
+	return do_bins_empty(self, i);
+    }
+}
+
+
 struct pool {
     struct segment *frontier;
     int i, pages_valid, pages_invalid, length;
