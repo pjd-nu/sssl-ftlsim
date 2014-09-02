@@ -100,6 +100,8 @@ def clean_select():
     else:
         seg = gdy.tail_segment()
 
+    if not seg:
+        assert seg
     bins.remove(seg)
     bins.insert(seg, seg.erasures+1)
     if seg.erasures >= max_erasures:
