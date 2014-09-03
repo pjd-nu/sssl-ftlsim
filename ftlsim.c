@@ -710,24 +710,27 @@ struct bins *do_bins_new(int n)
     return b;
 }
 
+void blist_add(struct entry *e, struct entry *list)
+{
+    e->next = list->next;
+    e->prev = list;
+    list->next->prev = e;
+    list->next = e;
+}
+
+void blist_rm(struct entry *e)
+{
+    e->prev->next = e->next;
+    e->next->prev = e->prev;
+    e->next = e->prev = 0;
+}
+
 void do_bins_insert(struct bins *b, struct segment *s, int i)
 {
     struct entry *e = calloc(sizeof(*e), 1);
     e->s = s;
     s->private = e;
-    
-    e->next = b->bins[i].next;
-    e->next->prev = e;
-    b->bins[i].next = e;
-    e->prev = &b->bins[i];
-}
-
-static struct entry *do_remove(struct segment *s)
-{
-    struct entry *e = s->private;
-    e->prev->next = e->next;
-    e->next->prev = e->prev;
-    return e;
+    blist_add(e, &b->bins[i]);
 }
 
 int do_bins_empty(struct bins *b, int i)
@@ -739,25 +742,33 @@ struct segment *do_bins_pop(struct bins *b, int i)
 {
     if (do_bins_empty(b, i))
 	return NULL;
-    struct entry *e = do_remove(b->bins[i].prev->s);
-    struct segment *s = e->s;
+    struct segment *s = do_bins_tail(b, i);
+    struct entry *e = s->private;
     s->private = NULL;
+    blist_rm(e);
     free(e);
     return s;
 }
 
+struct entry *last_tail;
 struct segment *do_bins_tail(struct bins *b, int i)
 {
     if (do_bins_empty(b, i))
 	return NULL;
     struct entry *e = b->bins[i].prev;
+    last_tail = e;
+    assert(e->s->private);
     return e->s;
 }
 
 void do_bins_remove(struct segment *s)
 {
-    struct entry *e = do_remove(s);
-    free(e);
+    struct entry *e = s->private;
+    if (e) {
+        blist_rm(e);
+        e->s = NULL;
+        free(e);
+    }
     s->private = NULL;
 }
 

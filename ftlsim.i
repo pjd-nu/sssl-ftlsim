@@ -149,7 +149,7 @@ struct bins {
 	do_bins_remove(s);
     }
     struct segment *tail(int i) {
-	do_bins_tail(self, i);
+	return do_bins_tail(self, i);
     }
     int is_empty(int i) {
 	return do_bins_empty(self, i);

@@ -56,7 +56,8 @@ for b in freelist:
     bins.insert(b, 0)
 
 gdy.add_segment(freelist.pop())
-for b in freelist:
+while freelist:
+    b = freelist.pop()
     ftl.put_blk(b)
 
 # use a sequential address source to write each page once
@@ -92,11 +93,14 @@ def clean_select():
     count += 1
     if count > wl_rate:
         count = 0
+        seg = None
         for i in range(max_erasures+20):
             seg = bins.tail(i)
-            if seg is None or not seg.in_pool:
-                continue
-            break
+            while seg and not seg.in_pool:
+                bins.remove(seg)
+                seg = bins.tail(i)
+            if seg:
+                break
     else:
         seg = gdy.tail_segment()
 
