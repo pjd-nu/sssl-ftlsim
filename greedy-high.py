@@ -78,7 +78,6 @@ def segments(pool):
         s = pool.next_segment(s)
 done = False
 total = 0
-q = 0
 
 while not done:
     ftl.run(src.handle, U*Np/10)
@@ -87,14 +86,11 @@ while not done:
     ftl.ext_writes = 0
     ftl.int_writes = 0
     if type(src) is getaddr.trace:
+        print 'loop'
         src = getaddr.trace(opts.tracefile)
     for s in segments(gdy):
         if s.erasures > max_erase:
             done = True
-    q += 1
-    if q > 20:
-        break
-            
 
 m = 0
 for s in segments(gdy):
