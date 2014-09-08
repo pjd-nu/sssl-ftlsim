@@ -137,15 +137,19 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
                 self->pool->min_valid = self->n_valid;
         }
         if (self->pool->write_callback) {
-            PyObject *args = Py_BuildValue("(i)", self->blkno);
-            PyObject *result = PyEval_CallObject(self->pool->write_callback,
-                                                 args);
-            if (PyErr_Occurred())
-                longjmp(bailout_buf, 1);
-            if (result != NULL) {
-                Py_DECREF(result);
+            static int i;
+            if (++i > 2) {
+                PyObject *args = Py_BuildValue("(i)", self->blkno);
+                PyObject *result = PyEval_CallObject(self->pool->write_callback,
+                                                     args);
+                if (PyErr_Occurred())
+                    longjmp(bailout_buf, 1);
+                if (result != NULL) {
+                    Py_DECREF(result);
+                }
+                Py_DECREF(args);
+                i = 0;
             }
-            Py_DECREF(args);
         }
     }
 }

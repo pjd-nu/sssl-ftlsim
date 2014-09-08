@@ -86,7 +86,6 @@ while not done:
     ftl.ext_writes = 0
     ftl.int_writes = 0
     if type(src) is getaddr.trace:
-        print 'loop'
         src = getaddr.trace(opts.tracefile)
     for s in segments(gdy):
         if s.erasures > max_erase:
