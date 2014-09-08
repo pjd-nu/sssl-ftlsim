@@ -31,5 +31,5 @@ setup (name = 'newsim',
        author_email = "pjd@ccs.neu.edu",
        description = """Modular high-speed FTL simulator""",
        ext_modules = [sim_module, adr_module, w_module],
-       py_modules = ["genaddr", "ftlsim", "getaddr", "lambertw"]
+       py_modules = ["genaddr", "ftlsim", "getaddr", "lambertw", "opt"]
        )

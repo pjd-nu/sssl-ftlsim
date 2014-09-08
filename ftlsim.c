@@ -136,6 +136,17 @@ void do_segment_overwrite(struct segment *self, int page, int lba)
             if (self->n_valid < self->pool->min_valid)
                 self->pool->min_valid = self->n_valid;
         }
+        if (self->pool->write_callback) {
+            PyObject *args = Py_BuildValue("(i)", self->blkno);
+            PyObject *result = PyEval_CallObject(self->pool->write_callback,
+                                                 args);
+            if (PyErr_Occurred())
+                longjmp(bailout_buf, 1);
+            if (result != NULL) {
+                Py_DECREF(result);
+            }
+            Py_DECREF(args);
+        }
     }
 }
 
@@ -305,7 +316,21 @@ struct segment *lru_tail_seg(struct pool *pool)
         return NULL;
     return pool->tail;
 }
-    
+
+void to_pool_callback(struct pool *pool, struct segment *fb)
+{
+    if (pool->to_pool_callback) {
+        PyObject *args = Py_BuildValue("(i)", fb->blkno);
+        PyObject *result = PyEval_CallObject(pool->to_pool_callback, args);
+        if (PyErr_Occurred())
+            longjmp(bailout_buf, 1);
+        if (result != NULL) {
+            Py_DECREF(result);
+        }
+        Py_DECREF(args);
+    }
+}
+        
 /* After the current write frontier fills, call this function to move
  * it to the pool and provide a new write frontier.
  */
@@ -327,6 +352,7 @@ void lru_pool_addseg(struct pool *pool, struct segment *fb)
         pool->pages_valid += pool->frontier->n_valid;
         pool->pages_invalid += (pool->Np - pool->frontier->n_valid);
         assert(pool->pages_valid >= 0 && pool->pages_invalid >= 0);
+        to_pool_callback(pool, fb);
     }
     pool->frontier = fb;
 
@@ -492,6 +518,7 @@ static void greedy_pool_addseg(struct pool *pool, struct segment *fb)
         list_add(blk, &pool->bins[blk->n_valid]);
         if (blk->n_valid < pool->min_valid)
             pool->min_valid = blk->n_valid;
+        to_pool_callback(pool, blk);
     }
 
     pool->frontier = fb;

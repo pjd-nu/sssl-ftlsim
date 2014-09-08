@@ -117,6 +117,8 @@ struct pool {
     struct segment *(*next_segment)(struct pool *pool, struct segment *s);
     struct segment *(*tail_segment)(struct pool *pool);
     void *(*remove)(struct pool *pool, struct segment *s);
+    PyObject *write_callback;
+    PyObject *to_pool_callback;
 };
 
 extern double ewma_rate;

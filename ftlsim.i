@@ -163,6 +163,8 @@ struct pool {
     int invalidations, msr;
     struct pool *next_pool;
     double rate;
+    PyObject *write_callback;
+    PyObject *to_pool_callback;
 };
 %extend pool {
     pool(struct ftl *ftl, char *type, int Np) {
