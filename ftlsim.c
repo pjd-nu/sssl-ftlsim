@@ -26,7 +26,7 @@
 
 #include "ftlsim.h"
 
-#define assert(x) {if (!(x)) *(char*)0 = 0;}
+#define assert(x) {if (!(x)) *(volatile char*)0 = 0;}
 
 #include <setjmp.h>
 jmp_buf bailout_buf;
@@ -207,6 +207,8 @@ static void check_new_segment(struct ftl *ftl, struct pool *pool)
     }
 }
     
+static struct pool *python_select_next_pool(struct ftl *ftl, int lba);
+
 void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
 {
     int i, j;
@@ -233,33 +235,39 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
         check_new_segment(ftl, pool);
 
         while (ftl->nfree < ftl->minfree) {
-            struct segment *b = NULL;
-            if (ftl->get_segment_to_clean) {
-                b = ftl->get_segment_to_clean(ftl);
-                pool = b->pool;
-                pool->remove(pool, b);
-            }
-            else if (ftl->get_pool_to_clean) {
-                pool = ftl->get_pool_to_clean(ftl);
-                b = pool->getseg(pool);
-            }
-            if (b == NULL) {
-                PyErr_SetString(PyExc_RuntimeError, "ftl: segment cleaning error");
-                longjmp(bailout_buf, 1);
-            }
-            struct pool *next = pool->next_pool;
-            if (next == NULL) {
-                PyErr_SetString(PyExc_RuntimeError, "ftl: pool.next_pool = None");
-                longjmp(bailout_buf, 1);
-            }
+	    while (ftl->nfree < ftl->maxfree) {
+		struct segment *b = NULL;
+		if (ftl->get_segment_to_clean) {
+		    b = ftl->get_segment_to_clean(ftl);
+		    pool = b->pool;
+		    pool->remove(pool, b);
+		}
+		else if (ftl->get_pool_to_clean) {
+		    pool = ftl->get_pool_to_clean(ftl);
+		    b = pool->getseg(pool);
+		}
+		if (b == NULL) {
+		    PyErr_SetString(PyExc_RuntimeError, "ftl: segment cleaning error");
+		    longjmp(bailout_buf, 1);
+		}
+		struct pool *next = pool->next_pool;
+		if (ftl->get_next_pool_arg) 
+		    next = python_select_next_pool(ftl, lba);
 
-            for (j = 0; j < b->Np; j++)
-                if (b->lba[j] != -1) {
-                    next->write(ftl, next, b->lba[j]);
-                    check_new_segment(ftl, next);
-                }
-            do_put_blk(ftl, b);
-        }
+		if (next == NULL) {
+		    PyErr_SetString(PyExc_RuntimeError, "ftl: pool.next_pool = None");
+		    longjmp(bailout_buf, 1);
+		}
+
+		for (j = 0; j < b->Np; j++)
+		    if (b->lba[j] != -1) {
+			next->write(ftl, next, b->lba[j]);
+			check_new_segment(ftl, next);
+		    }
+		assert(!b->in_pool);
+		do_put_blk(ftl, b);
+	    }
+	}
     }
 }
 
@@ -639,6 +647,19 @@ void return_segment(struct segment *seg)
 {
     segment_retval = seg;
     pool_retval = NULL;
+}
+
+static struct pool *python_select_next_pool(struct ftl *ftl, int lba)
+{
+    PyObject *args = Py_BuildValue("(i)", lba);
+    PyObject *result = PyEval_CallObject(ftl->get_next_pool_arg, args);
+    if (PyErr_Occurred())
+        longjmp(bailout_buf, 1);
+    if (result != NULL) {
+        Py_DECREF(result);
+    }
+    Py_DECREF(args);
+    return pool_retval;
 }
 
 static struct pool *python_select_input(struct ftl *ftl, int lba)

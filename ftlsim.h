@@ -68,12 +68,13 @@ struct ftl {
         int    page_num;
     } *map;
     int T, Np;
-    int int_writes, ext_writes;
-    int nfree, minfree;
+    int int_writes, ext_writes, max_writes;
+    int nfree, minfree, maxfree;
     int npools;
     struct pool *pools[100];
     write_selector_t get_input_pool;
     PyObject *get_input_pool_arg;
+    PyObject *get_next_pool_arg;
     clean_selector_t get_pool_to_clean;
     PyObject *get_pool_to_clean_arg;
     segment_selector_t get_segment_to_clean;

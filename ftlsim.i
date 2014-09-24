@@ -25,7 +25,7 @@
 #define SWIG_FILE_WITH_INIT
 #include "ftlsim.h"
 #undef assert
-#define assert(x) {if (!(x)) *(char*)0 = 0;}
+#define assert(x) {if (!(x)) *(volatile char*)0 = 0;}
 %}
 
 struct segment {
@@ -74,9 +74,10 @@ void return_segment(struct segment *);
 
 struct ftl {
     int int_writes, ext_writes;
-    int nfree, minfree;
+    int nfree, minfree, maxfree;
     write_selector_t get_input_pool;
     PyObject *get_input_pool_arg;
+    PyObject *get_next_pool_arg;
     clean_selector_t get_pool_to_clean;
     PyObject *get_pool_to_clean_arg;
     segment_selector_t get_segment_to_clean;
