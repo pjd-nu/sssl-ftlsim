@@ -33,6 +33,7 @@ struct segment {
     int  blkno, elem;
     int  in_pool;
     int  erasures;
+    struct pool *pool;
 };
 
 %extend segment {
@@ -44,6 +45,9 @@ struct segment {
     }
     void write(int page, int lba) {
         do_segment_write(self, page, lba);
+    }
+    void write_ftl(struct ftl *ftl, int page, int lba) {
+        do_segment_write_ftl(ftl, self, page, lba);
     }
     void overwrite(int page, int lba) {
         do_segment_overwrite(self, page, lba);

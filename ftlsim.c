@@ -106,16 +106,21 @@ struct segment *get_segment(int i)
     return allsegs[i];
 }
 
-void do_segment_write(struct segment *self, int page, int lba)
+void do_segment_write_ftl(struct segment *self, struct ftl *ftl,
+                          int page, int lba)
 {
-    struct ftl *ftl = self->pool->ftl;
     assert(page < self->Np && page >= 0 && self->lba[page] == -1);
     assert(lba >= 0 && lba < ftl->T * ftl->Np);
     
     self->lba[page] = lba;
-    self->pool->ftl->map[lba].block = self;
-    self->pool->ftl->map[lba].page_num = page;
+    ftl->map[lba].block = self;
+    ftl->map[lba].page_num = page;
     self->n_valid++;
+}
+
+void do_segment_write(struct segment *self, int page, int lba)
+{
+    do_segment_write_ftl(self, self->pool->ftl, page, lba);
 }
 
 void do_segment_overwrite(struct segment *self, int page, int lba)
