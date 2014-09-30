@@ -21,6 +21,8 @@
 
 #include <Python.h>
 
+extern int total_writes;
+
 struct int_array {          /* kludge for indexed arrays */
     int val;
 };

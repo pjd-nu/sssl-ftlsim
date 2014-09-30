@@ -106,6 +106,7 @@ struct segment *get_segment(int i)
     return allsegs[i];
 }
 
+int total_writes;
 void do_segment_write_ftl(struct segment *self, struct ftl *ftl,
                           int page, int lba)
 {
@@ -116,6 +117,7 @@ void do_segment_write_ftl(struct segment *self, struct ftl *ftl,
     ftl->map[lba].block = self;
     ftl->map[lba].page_num = page;
     self->n_valid++;
+    total_writes++;
 }
 
 void do_segment_write(struct segment *self, int page, int lba)
@@ -244,8 +246,10 @@ void do_ftl_run(struct ftl *ftl, struct getaddr *addrs, int count)
 		struct segment *b = NULL;
 		if (ftl->get_segment_to_clean) {
 		    b = ftl->get_segment_to_clean(ftl);
-		    pool = b->pool;
-		    pool->remove(pool, b);
+                    if (b->in_pool) {
+                        pool = b->pool;
+                        pool->remove(pool, b);
+                    }
 		}
 		else if (ftl->get_pool_to_clean) {
 		    pool = ftl->get_pool_to_clean(ftl);

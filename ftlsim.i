@@ -28,6 +28,8 @@
 #define assert(x) {if (!(x)) *(volatile char*)0 = 0;}
 %}
 
+int total_writes;
+
 struct segment {
     int  n_valid;
     int  blkno, elem;
@@ -47,7 +49,7 @@ struct segment {
         do_segment_write(self, page, lba);
     }
     void write_ftl(struct ftl *ftl, int page, int lba) {
-        do_segment_write_ftl(ftl, self, page, lba);
+        do_segment_write_ftl(self, ftl, page, lba);
     }
     void overwrite(int page, int lba) {
         do_segment_overwrite(self, page, lba);
