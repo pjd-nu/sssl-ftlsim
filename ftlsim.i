@@ -28,6 +28,8 @@
 #define assert(x) {if (!(x)) *(volatile char*)0 = 0;}
 %}
 
+int total_writes;
+
 struct segment {
     int  n_valid;
     int  blkno, elem;
