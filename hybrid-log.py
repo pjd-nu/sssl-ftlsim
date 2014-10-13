@@ -19,14 +19,17 @@
 # along with ftlsim. If not, see http://www.gnu.org/licenses/. 
 #
 
-import genaddr
+import getaddr
 import ftlsim
 
 # parameters
-#
-T = 2048
-U = 2000
-Np = 64
+import opt, sys
+opts = opt.parse(sys.argv[1])
+U,Np = opts.U, opts.Np
+log_blks = opts.log_blks
+
+minfree = opts.minfree
+T = U + log_blks + minfree
 
 # moving parts
 #
@@ -44,7 +47,7 @@ for i in range(U):
     b.blkno = i
     pool.add_segment(b)
     for j in range(Np):
-        b.write(j, i*Np+j)
+        b.write_ftl(rmap, j, i*Np+j)
 
 # this is the look-aside array holding active log blocks
 #
@@ -57,7 +60,7 @@ freelist = [ftlsim.segment(Np) for i in range(T-U)]
 for b in freelist:
     b.thisown = False
     b.i = 0                             # index to write at
-    b.sequential = True
+    b.sequential = True                 # only needs to live until we merge
     pool.add_segment(b)
 
 
@@ -81,9 +84,8 @@ def hlb_merge(b):
     tmp = data[b.blkno]
     if b.sequential:
         if b.i == Np:
-            pass #print "switch"
-        else:
-            # print "partial"
+            pass                        # switch merge
+        else:                           # partial merge
             for i in range(b.i, Np):
                 lba = blkno*Np + i
                 assert tmp.page(i) == lba
@@ -96,16 +98,15 @@ def hlb_merge(b):
         tmp.erase()
         freelist.append(tmp)
         erasures += 1
-    else:
-        # print "full"
+    else:                               # full merge
         b2 = hlb_get_free_blk(0)
         for i in range(Np):            # we don't bother looking up
             lba = blkno*Np + i         # to see which block it's in...
             assert b2.page(i) == -1
             b2.write(i, lba)
             intwrites += 1
-        data[blkno].erase()
-        freelist.append(data[blkno])
+        tmp.erase()
+        freelist.append(tmp)
         data[blkno] = b2
         logs[blkno] = None
         log_list.remove(b)
@@ -117,8 +118,7 @@ def hlb_merge(b):
 #
 def hlb_get_free_blk(nfree):
     global data, logs, freelist, log_list
-    if len(freelist) < nfree:
-        #print "evict"
+    while len(freelist) < nfree:
         b = log_list[0]
         hlb_merge(b)
     return freelist.pop(0)
