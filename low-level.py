@@ -25,9 +25,9 @@ import ftlsim
 
 # parameters
 #
-U = 2302
+U = 23020
 Np = 64
-S_f = 0.2
+S_f = 0.091
 alpha = 1 / (1-S_f)
 minfree = Np
 T = int(U * alpha) + minfree
@@ -43,7 +43,8 @@ lru = ftlsim.pool(rmap, "lru", Np)
 freelist = [ftlsim.segment(Np) for i in range(T)]
 for b in freelist:
     b.thisown = False
-
+    b.elem = 0
+    
 # Start off with a write frontier
 #
 lru.add_segment(freelist.pop())
@@ -51,10 +52,11 @@ lru.add_segment(freelist.pop())
 intwrites = 0
 extwrites = 0
 
+t = 0
 # individual flash page write (internal copy or external write)
 #
 def int_write(lba):
-    global lru, rmap
+    global lru, rmap, t
     global intwrites, extwrites
 
     intwrites += 1
@@ -66,6 +68,8 @@ def int_write(lba):
     f.write(lru.i, lba)
     lru.i += 1
     if lru.i >= Np:
+        f.elem = t
+        t += 1
         lru.add_segment(freelist.pop())
         
 
@@ -105,6 +109,14 @@ for a in src.addrs():
         extwrites = 0
         intwrites = 0
         j += 1
-        if j > 10:
+        if j > 15:
             break
+
+        if j > 10:
+            for i in range(T):
+                s = ftlsim.get_segment(i)
+                if s is None or not s.in_pool:
+                    continue
+                print t - s.elem, s.n_valid
+            print '----'
 

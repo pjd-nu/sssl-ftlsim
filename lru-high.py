@@ -24,12 +24,14 @@ import ftlsim
 
 # parameters
 #
-U = 23020
+#U = 23020
+U = 2302
 Np = 128
-S_f = 0.07
+S_f = 0.091
 alpha = 1 / (1-S_f)
 minfree = Np
 T = int(U * alpha) + minfree
+T0 = T - minfree
 
 # FTL with default parameters for single pool
 #
@@ -55,8 +57,8 @@ for b in freelist:
 
 # use a sequential address source to write each page once
 #
-seq = getaddr.seq()
-ftl.run(seq.handle, U*Np);
+seq = getaddr.fill(T0, U)
+ftl.run(seq.handle, T0*Np-1);
 
 print "ready..."
 
@@ -68,4 +70,16 @@ for i in range(10):
     print ftl.ext_writes, ftl.int_writes, (1.0*ftl.int_writes)/ftl.ext_writes
     ftl.ext_writes = 0
     ftl.int_writes = 0
+
+    e = [0] * T
+    for i in range(T):
+        s = ftlsim.get_segment(i)
+	if s is None or not s.in_pool:
+            continue
+        e[s.n_valid] += 1
+
+    for i in range(T):
+        if e[i]:
+             print i, e[i]
+    print '----'
 
